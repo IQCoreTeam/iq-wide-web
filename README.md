@@ -136,8 +136,10 @@ If the value of the web was *"hyperlinks tie pages together,"* the value of IQ i
 
 If the mind map is *"survey the whole structure,"* search is *"jump in at a keyword."* Type a keyword and get a ranked list of matching inscriptions across all of IQ — like a search results page.
 
-Inspiration: [reference image](https://media.discordapp.net/attachments/1411831217556426773/1504842793196191924/IMG_5300.jpg)
+Inspiration:
 
+![reference](./img.png)
+https://github.com/IQCoreTeam/iq-cache-mindmap
 How it could work:
 - Crawl every row via the DbRoot tree (same data source as the mind map)
 - Pull text columns (sub, com, name — varies per dApp) into a search index (SQLite FTS5 or Postgres)
