@@ -140,13 +140,7 @@ Inspiration:
 
 ![reference](./img.png)
 https://github.com/IQCoreTeam/iq-cache-mindmap
-How it could work:
-- Crawl every row via the DbRoot tree (same data source as the mind map)
-- Pull text columns (sub, com, name — varies per dApp) into a search index (SQLite FTS5 or Postgres)
-- iq-wide-web's `/search?q=...` queries the index
-- Each result clicks through to the matching identifier's page (the existing wallet / PDA / sig dispatch handles the rest)
 
-Cleanest if the crawler is its own service (call it `iq-search`).
 
 > Note: it would be slick if PDAs could carry actual site info (or have a git source attached) so a Google-style result was clickable straight to the live site — not just info, but a real jump destination. Not needed for the early version though.
 
