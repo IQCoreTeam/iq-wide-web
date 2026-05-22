@@ -1,0 +1,25 @@
+/* Minimal non-react95 concerns only. react95's styleReset + fonts + theme
+ * colors are injected via the <GlobalStyle /> component from our providers,
+ * because styled-components can own the rest. */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* wallet-adapter-react-ui ships its own CSS which we import in providers.
+ * Override a couple of rules so the connect button blends with react95. */
+.wallet-adapter-button-trigger {
+  background: transparent !important;
+  color: inherit !important;
+  height: auto !important;
+  padding: 0 !important;
+  font-family: inherit !important;
+}
