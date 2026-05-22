@@ -3,6 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { shapeOf } from "./shape";
 import { fetchDbRoots, matchPubkey } from "./dbroots";
+import { fetchSnsResolution } from "./sns";
 import type { IdentifierKind } from "./types";
 
 // Classify a pubkey: a known dApp table PDA, otherwise a wallet. We don't gate
@@ -20,13 +21,14 @@ async function resolve(ident: string): Promise<IdentifierKind> {
       return resolvePubkey(ident);
     case "sig":
       return { kind: "tx", signature: ident };
-    case "sol":
-      // TODO: .sol support is blocked on the gateway. Today
-      // resolveDomainToSig (iq-gateway src/chain/sns.ts) only recognizes a tx
-      // sig or a /site/<sig> URL record — it ignores wallet / table-PDA
-      // records. Once the gateway returns a pubkey too, resolve the domain
-      // here and recurse into resolvePubkey on the result.
-      return { kind: "not-found", ident };
+    case "sol": {
+      // A .sol points at a pubkey: the SOL record if the owner set one (lets a
+      // domain target any wallet/PDA), otherwise the domain owner itself ("the
+      // domain just is that wallet"). Then resolve that pubkey like any other.
+      const { owner, record } = await fetchSnsResolution(ident);
+      const target = record ?? owner;
+      return target ? resolvePubkey(target) : { kind: "not-found", ident };
+    }
     default:
       return { kind: "not-found", ident };
   }
