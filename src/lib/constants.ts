@@ -20,7 +20,7 @@ export const RPC_URL =
  *   - profile metadata fallback reads: `${GATEWAY_URL}/data/{txId}`
  *   - IQ Pages live URLs:              `${GATEWAY_URL}/site/{treeTxId}/{entry}`
  */
-export const GATEWAY_URL = "https://gateway.solanainternet.com";
+export const GATEWAY_URL = "https://gateway.iqlabs.dev";
 
 /** SolChat origin — deep link target for the SolChat tab. User URL:
  *  `${SOLCHAT_URL}/u/{walletAddress}`. */

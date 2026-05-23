@@ -6,7 +6,7 @@
 import { PublicKey } from "@solana/web3.js";
 import iqlabs from "iqlabs-sdk";
 
-const PRIMARY_GATEWAY = "https://gateway.solanainternet.com";
+const PRIMARY_GATEWAY = "https://gateway.iqlabs.dev";
 const BACKUP_GATEWAY = "https://gateway.iqlabs.dev";
 const GATEWAYS = [PRIMARY_GATEWAY, BACKUP_GATEWAY];
 const GATEWAY_OVERRIDE_KEY = "iqprofilenet_gateway";
