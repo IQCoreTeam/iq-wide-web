@@ -14,7 +14,7 @@ export const IQPAGES_ROOT_ID = "iqpages-root";
  *  browser-origin whitelist already covers this domain. */
 export const RPC_URL =
   process.env.NEXT_PUBLIC_RPC_URL ||
-  "https://mainnet.helius-rpc.com/?api-key=767cde04-93dd-4e62-9580-978c74febc93";
+  "https://mainnet.helius-rpc.com/?api-key=fbb113ce-eeb4-4277-8c44-7153632d175a";
 
 /** IQ Gateway origin. Used for:
  *   - profile metadata fallback reads: `${GATEWAY_URL}/data/{txId}`
