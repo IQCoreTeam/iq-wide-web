@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import { useParams } from "next/navigation";
 import { Window, WindowContent, WindowHeader } from "react95";
 import { ProfilePanel } from "@/components/profile/profile-panel";
@@ -8,6 +9,10 @@ import { AppHeader } from "@/components/ui/app-header";
 import { AppFooter } from "@/components/ui/app-footer";
 import { PageContainer, ResponsiveGrid } from "@/components/ui/layout";
 import { FONT } from "@/lib/ui/typography";
+import { IQGIT_URL } from "@/lib/constants";
+import { useIqpagesList } from "@/lib/iqpages/use-iqpages-data";
+import { resolveLaunchTarget } from "@/lib/iqpages/iqpages-service";
+import { useQuery } from "@tanstack/react-query";
 import { useResolve } from "@/resolver/use-resolve";
 import type { DbRoot, TableHint } from "@/resolver/types";
 
@@ -28,19 +33,19 @@ function MessageWindow({ title, body, color }: { title: string; body: string; co
   );
 }
 
-// Matched a table PDA on a known DbRoot.
-//
-// This is where dApp-specific rendering will go once we build it:
-//  - git_commits hint registered on iqpages → load the pages site via the
-//    gateway site endpoint and render it
-//  - git_commits hint, not on iqpages → redirect to the git frontend, or iframe
-//  - other dApps → their own view
-//
-// For now we just surface what we resolved (dev belongs-to view).
+// Matched a table PDA on a known DbRoot. Today only the git case is wired up;
+// other dApps fall through to the dev belongs-to placeholder.
 //
 // iq-wide-web is open source — if you run a dApp and add a new DbRoot, please
 // PR a case here so your tables render the way you want.
 function DbRootMatch({ dbroot, hint }: { dbroot: DbRoot; hint: TableHint }) {
+  // A git_commits commit-table hint always looks like "git_commits:OWNER:REPO".
+  // Non-git matches drop straight to belongs-to.
+  const gitParts = hint.label?.startsWith("git_commits:") ? hint.label.split(":") : null;
+  if (gitParts && gitParts.length === 3) {
+    return <GitMatch owner={gitParts[1]} repo={gitParts[2]} />;
+  }
+
   const dApp = dbroot.id ?? dbroot.pda;
   const table = hint.label ?? hint.hex;
   return (
@@ -49,6 +54,43 @@ function DbRootMatch({ dbroot, hint }: { dbroot: DbRoot; hint: TableHint }) {
       body={`This address belongs to ${dApp} — table "${table}".`}
     />
   );
+}
+
+// A git repo: deployed-as-an-iqpages-site is the primary case — we render
+// the site on our own host via the /site proxy. If it isn't deployed, we
+// hand the visitor off to the git frontend. Deployment check is one cached
+// list lookup; the launch target read happens only when deployed (it pulls
+// the entry path + treeTxId).
+function GitMatch({ owner, repo }: { owner: string; repo: string }) {
+  const { data: deployments, isLoading: deploymentsLoading } = useIqpagesList();
+  const deployed = deployments?.some((d) => d.owner === owner && d.repo === repo);
+
+  const launch = useQuery({
+    queryKey: ["launch-target", owner, repo],
+    queryFn: () => resolveLaunchTarget(owner, repo),
+    enabled: deployed === true,
+    staleTime: 60_000,
+  });
+
+  const target =
+    deployed && launch.data
+      ? `/site/${launch.data.treeTxId}/${launch.data.config?.entry?.replace(/^\//, "") ?? ""}`
+      : deployed === false
+        ? `${IQGIT_URL}/${owner}/${repo}`
+        : null;
+
+  useEffect(() => {
+    if (target) window.location.href = target;
+  }, [target]);
+
+  const status = deploymentsLoading
+    ? "Looking up deployment status…"
+    : deployed && !launch.data
+      ? "Loading site…"
+      : target
+        ? `Sending you to ${target}`
+        : "";
+  return <MessageWindow title="git repo" body={status} />;
 }
 
 export default function IdentPage() {
