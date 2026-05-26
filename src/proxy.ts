@@ -50,5 +50,5 @@ export async function proxy(req: NextRequest) {
 export const config = {
   // Skip Next internals, the proxy route itself, and the favicon. Everything
   // else is checked by isIdent() above.
-  matcher: ["/((?!_next|site|favicon|api).*)"],
+  matcher: ["/((?!_next|site|table|favicon|api).*)"],
 };

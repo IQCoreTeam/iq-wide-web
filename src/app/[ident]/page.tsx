@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import Link from "next/link";
 import { useParams } from "next/navigation";
 import { Window, WindowContent, WindowHeader } from "react95";
 import { ProfilePanel } from "@/components/profile/profile-panel";
@@ -46,10 +47,21 @@ function DbRootMatch({ dbroot, hint }: { dbroot: DbRoot; hint: TableHint }) {
   const dApp = dbroot.id ?? dbroot.pda;
   const table = hint.label ?? hint.hex;
   return (
-    <MessageWindow
-      title="belongs to"
-      body={`This address belongs to ${dApp} — table "${table}".`}
-    />
+    <PageContainer>
+      <AppHeader showBack />
+      <Window style={{ width: "100%", maxWidth: 480, margin: "0 auto" }}>
+        <WindowHeader><span>belongs to</span></WindowHeader>
+        <WindowContent>
+          <p style={{ padding: 16, margin: 0, fontSize: FONT.body }}>
+            This address belongs to <strong>{dApp}</strong> — table &quot;{table}&quot;.
+          </p>
+          <p style={{ padding: "0 16px 16px", margin: 0, fontSize: FONT.body }}>
+            See it in the <Link href="/table" style={{ textDecoration: "underline" }}>tables explorer</Link>.
+          </p>
+        </WindowContent>
+      </Window>
+      <AppFooter />
+    </PageContainer>
   );
 }
 
