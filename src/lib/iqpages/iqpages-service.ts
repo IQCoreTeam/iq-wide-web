@@ -8,18 +8,17 @@
 // iqprofile.json) is fetched lazily, on click — never as a fan-out.
 
 import { PublicKey } from "@solana/web3.js";
-import iqlabs from "iqlabs-sdk";
 import {
   loadBlob,
   loadTree,
   readLatestCommit,
   readTableRowsGW,
 } from "@/lib/gateway/reader";
-
-const ROOT_ID = "iqpages-root";
-const TABLE_HINT = "deployed";
-const CONFIG_FILENAME = "iqpages.json";
-const PROFILE_FILENAME = "iqprofile.json";
+import {
+  DEPLOYED_TABLE_PDA,
+  IQPAGES_CONFIG_FILENAME as CONFIG_FILENAME,
+  IQPAGES_PROFILE_FILENAME as PROFILE_FILENAME,
+} from "./constants";
 
 export interface Deployment {
   id: string;
@@ -48,16 +47,9 @@ export interface LaunchTarget {
   profile: IqprofileConfig | null;
 }
 
-function deployedTablePda(): PublicKey {
-  const rootSeed = iqlabs.utils.toSeedBytes(ROOT_ID);
-  const tableSeed = iqlabs.utils.toSeedBytes(TABLE_HINT);
-  const dbRoot = iqlabs.contract.getDbRootPda(rootSeed);
-  return iqlabs.contract.getTablePda(dbRoot, tableSeed);
-}
-
 /** Every deployment registered in the gallery. One HTTP call. */
 export async function listAllDeployments(): Promise<Deployment[]> {
-  return readTableRowsGW<Deployment>(deployedTablePda(), 1000);
+  return readTableRowsGW<Deployment>(new PublicKey(DEPLOYED_TABLE_PDA), 1000);
 }
 
 /** Resolve everything needed to launch one app. Called only when the user

@@ -10,9 +10,6 @@ import { AppFooter } from "@/components/ui/app-footer";
 import { PageContainer, ResponsiveGrid } from "@/components/ui/layout";
 import { FONT } from "@/lib/ui/typography";
 import { IQGIT_URL } from "@/lib/constants";
-import { useIqpagesList } from "@/lib/iqpages/use-iqpages-data";
-import { resolveLaunchTarget } from "@/lib/iqpages/iqpages-service";
-import { useQuery } from "@tanstack/react-query";
 import { useResolve } from "@/resolver/use-resolve";
 import type { DbRoot, TableHint } from "@/resolver/types";
 
@@ -56,41 +53,15 @@ function DbRootMatch({ dbroot, hint }: { dbroot: DbRoot; hint: TableHint }) {
   );
 }
 
-// A git repo: deployed-as-an-iqpages-site is the primary case — we render
-// the site on our own host via the /site proxy. If it isn't deployed, we
-// hand the visitor off to the git frontend. Deployment check is one cached
-// list lookup; the launch target read happens only when deployed (it pulls
-// the entry path + treeTxId).
+// A git repo that landed on the client page. Deployed iqpages sites are
+// already intercepted by src/proxy.ts before they reach us, so anything we
+// see here is an un-deployed repo — hand it off to the git frontend.
 function GitMatch({ owner, repo }: { owner: string; repo: string }) {
-  const { data: deployments, isLoading: deploymentsLoading } = useIqpagesList();
-  const deployed = deployments?.some((d) => d.owner === owner && d.repo === repo);
-
-  const launch = useQuery({
-    queryKey: ["launch-target", owner, repo],
-    queryFn: () => resolveLaunchTarget(owner, repo),
-    enabled: deployed === true,
-    staleTime: 60_000,
-  });
-
-  const target =
-    deployed && launch.data
-      ? `/site/${launch.data.treeTxId}/${launch.data.config?.entry?.replace(/^\//, "") ?? ""}`
-      : deployed === false
-        ? `${IQGIT_URL}/${owner}/${repo}`
-        : null;
-
+  const target = `${IQGIT_URL}/${owner}/${repo}`;
   useEffect(() => {
-    if (target) window.location.href = target;
+    window.location.href = target;
   }, [target]);
-
-  const status = deploymentsLoading
-    ? "Looking up deployment status…"
-    : deployed && !launch.data
-      ? "Loading site…"
-      : target
-        ? `Sending you to ${target}`
-        : "";
-  return <MessageWindow title="git repo" body={status} />;
+  return <MessageWindow title="git repo" body={`Sending you to ${target}`} />;
 }
 
 export default function IdentPage() {
