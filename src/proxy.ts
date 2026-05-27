@@ -76,13 +76,15 @@ export async function proxy(req: NextRequest) {
     const resolved = await cachedResolve(first);
     if (!resolved) return NextResponse.next();
 
-    const url = req.nextUrl.clone();
-    url.pathname = `/site/${resolved.treeTxId}/${rest.length ? rest.join("/") : resolved.entry}`;
-    // The site route needs to know the ident to inject <base href="/{ident}/">
-    // into served HTML, so relative asset URLs in the deployed site resolve
-    // back to /{ident}/... (which we proxy) instead of root (which we don't).
-    url.searchParams.set("ident", first);
-    return NextResponse.rewrite(url);
+    // Build the rewrite target from scratch — cloning req.nextUrl and mutating
+    // it sometimes drops searchParams across Next's rewrite boundary in the
+    // Edge runtime. The site route reads ?ident=... to inject <base href>.
+    const tail = rest.length ? rest.join("/") : resolved.entry;
+    const dest = new URL(
+      `/site/${resolved.treeTxId}/${tail}?ident=${encodeURIComponent(first)}`,
+      req.nextUrl,
+    );
+    return NextResponse.rewrite(dest);
   }
 
   // Case 2: not an ident — but deployed sites often ship HTML with
