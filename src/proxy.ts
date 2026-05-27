@@ -82,18 +82,18 @@ export async function proxy(req: NextRequest) {
 
   // Case 2: not an ident — but deployed sites often ship HTML with
   // root-absolute asset paths (`/assets/style.css`). Use the Referer to
-  // figure out which deployed site the asset belongs to, then verify the
-  // path exists in that site's manifest before rewriting. Verification
-  // kills false positives (e.g. a stale referer from another site, or our
-  // own static assets accidentally requested with an ident-shaped referer).
+  // figure out which deployed site the asset belongs to. If we can also
+  // fetch the manifest, prefer rewriting only for files that actually
+  // exist in it (kills false positives from stale referers). If the
+  // manifest is unavailable for any reason, rewrite anyway — the site
+  // route below will produce a clean 404 for paths that don't exist.
   const ident = identFromReferer(req);
   if (!ident) return NextResponse.next();
   const resolved = await cachedResolve(ident);
   if (!resolved) return NextResponse.next();
-  const manifest = await cachedManifest(resolved.treeTxId);
-  if (!manifest) return NextResponse.next();
   const wanted = parts.join("/");
-  if (!manifest.files[wanted]) return NextResponse.next();
+  const manifest = await cachedManifest(resolved.treeTxId);
+  if (manifest && !manifest.files[wanted]) return NextResponse.next();
   const url = req.nextUrl.clone();
   url.pathname = `/site/${resolved.treeTxId}/${wanted}`;
   return NextResponse.rewrite(url);
