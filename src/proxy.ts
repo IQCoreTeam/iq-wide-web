@@ -6,26 +6,47 @@
 // the server and rewrite the request internally, so the address bar stays
 // on /{ident} while the proxy route serves the gateway HTML.
 //
-// Cache: ident → treeTxId in a module-scope Map (Edge instance memory).
-// First request resolves; same instance's follow-up requests (asset loads
-// on the same page) hit the cache. Cold instances re-resolve, which is
-// fine — every dependency is the gateway, which caches itself.
+// Caches: ident → {treeTxId, entry} and treeTxId → manifest (file list +
+// indexPath). Module-scope Maps in Edge instance memory; cold instances
+// re-fetch, which is fine — the gateway has its own caches behind them.
 
 import { NextRequest, NextResponse } from "next/server";
 import { resolveDeployedSite } from "@/lib/iqpages/resolve-site";
+import { GATEWAY_URL } from "@/lib/constants";
 
 const CACHE_TTL_MS = 5 * 60 * 1000;
+const MANIFEST_TTL_MS = 60 * 60 * 1000;
 type Resolved = { treeTxId: string; entry: string } | null;
-type CacheEntry = { value: Resolved; expires: number };
-const cache = new Map<string, CacheEntry>();
+type Manifest = { indexPath: string; files: Record<string, string> } | null;
+type Entry<T> = { value: T; expires: number };
+
+const identCache = new Map<string, Entry<Resolved>>();
+const manifestCache = new Map<string, Entry<Manifest>>();
 
 function cachedResolve(ident: string): Promise<Resolved> {
-  const hit = cache.get(ident);
+  const hit = identCache.get(ident);
   if (hit && hit.expires > Date.now()) return Promise.resolve(hit.value);
   return resolveDeployedSite(ident).then((res) => {
-    cache.set(ident, { value: res, expires: Date.now() + CACHE_TTL_MS });
+    identCache.set(ident, { value: res, expires: Date.now() + CACHE_TTL_MS });
     return res;
   });
+}
+
+async function cachedManifest(treeTxId: string): Promise<Manifest> {
+  const hit = manifestCache.get(treeTxId);
+  if (hit && hit.expires > Date.now()) return hit.value;
+  let value: Manifest = null;
+  try {
+    const res = await fetch(`${GATEWAY_URL}/site/${treeTxId}/manifest`);
+    if (res.ok) {
+      const m = (await res.json()) as { indexPath?: string; files?: Record<string, string> };
+      if (m.files) value = { indexPath: m.indexPath ?? "index.html", files: m.files };
+    }
+  } catch (e) {
+    console.warn(`[proxy] manifest fetch failed: ${treeTxId}`, e);
+  }
+  manifestCache.set(treeTxId, { value, expires: Date.now() + MANIFEST_TTL_MS });
+  return value;
 }
 
 const PUBKEY_RE = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
@@ -60,15 +81,21 @@ export async function proxy(req: NextRequest) {
   }
 
   // Case 2: not an ident — but deployed sites often ship HTML with
-  // root-absolute asset paths (`/assets/style.css`). The browser fetches
-  // those without the ident prefix. Use the Referer to recover which
-  // deployed site the asset belongs to.
+  // root-absolute asset paths (`/assets/style.css`). Use the Referer to
+  // figure out which deployed site the asset belongs to, then verify the
+  // path exists in that site's manifest before rewriting. Verification
+  // kills false positives (e.g. a stale referer from another site, or our
+  // own static assets accidentally requested with an ident-shaped referer).
   const ident = identFromReferer(req);
   if (!ident) return NextResponse.next();
   const resolved = await cachedResolve(ident);
   if (!resolved) return NextResponse.next();
+  const manifest = await cachedManifest(resolved.treeTxId);
+  if (!manifest) return NextResponse.next();
+  const wanted = parts.join("/");
+  if (!manifest.files[wanted]) return NextResponse.next();
   const url = req.nextUrl.clone();
-  url.pathname = `/site/${resolved.treeTxId}/${parts.join("/")}`;
+  url.pathname = `/site/${resolved.treeTxId}/${wanted}`;
   return NextResponse.rewrite(url);
 }
 
