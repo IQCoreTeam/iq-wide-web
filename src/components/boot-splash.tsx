@@ -142,14 +142,14 @@ const Cursor = styled.span`
 
 const BIOS_LOG: string[] = [
   "IQLabs BIOS v0.1 — Solana Mainnet",
-  "Copyright (C) 2025, IQLabs Protocol. All rights reserved.",
+  "Copyright (C) 2026, IQLabs Protocol. All rights reserved.",
   "",
   "Program ID  JE4333 : 9KLLch...iQLabs      OK",
   "Cluster     mainnet-beta                  OK",
   "RPC         Helius                        OK",
   "",
   "IQSDK Extension  v1.3.2",
-  "Copyright (C) 2025, IQLabs Protocol.",
+  "Copyright (C) 2026, IQLabs Protocol.",
   "   Detecting wallet adapter  ........... OK",
   "   Loading IQDB reader  ................ OK",
   "   Loading profile cache  .............. OK",
@@ -203,7 +203,7 @@ export function BootSplash() {
         </LogoStage>
         <Meta>IQ Profile Net Version 0.1</Meta>
         <Copyright>
-          Copyright (c) IQLabs, 2025. All Rights Reserved.
+          Copyright (c) IQLabs, 2026. All Rights Reserved.
           <br />
           IQLabs Protocol on Solana
         </Copyright>
