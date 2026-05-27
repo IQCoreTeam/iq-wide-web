@@ -1,13 +1,15 @@
 "use client";
 
-// Home is a tiny README — what this thing is, where it lives, and what already
-// works. The Google-style search bar is shown disabled (coming soon); for now
-// the working entry point is the table explorer.
+// Home is a tiny README + a live search box. The search hits the gateway
+// catalog (gwFetch /search) and renders hits inline. Click behavior on each
+// hit is deferred — we just want results visible first.
 
+import { useState } from "react";
 import Link from "next/link";
 import styled from "styled-components";
 import { Button, GroupBox, TextInput, Window, WindowContent, WindowHeader } from "react95";
 import { FONT } from "@/lib/ui/typography";
+import { searchCatalog, type SearchHit } from "@/lib/search";
 
 const Page = styled.div`
   min-height: 100vh;
@@ -36,13 +38,63 @@ const Mono = styled.code`
   padding: 1px 6px;
 `;
 
-const SearchRow = styled.div`
+const SearchRow = styled.form`
   display: flex;
   gap: 8px;
   align-items: center;
 `;
 
+const ResultList = styled.ul`
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+`;
+
+const ResultCard = styled.li`
+  padding: 8px 4px;
+  border-top: 1px dotted rgba(0, 0, 0, 0.25);
+  &:first-child { border-top: none; }
+`;
+
+const Breadcrumb = styled.div`
+  font-size: ${FONT.meta}px;
+  opacity: 0.7;
+`;
+
+const Title = styled.div`
+  font-size: ${FONT.body}px;
+  font-weight: 700;
+  word-break: break-all;
+`;
+
+const Snippet = styled.div`
+  font-size: ${FONT.meta}px;
+  opacity: 0.85;
+  margin-top: 2px;
+  word-break: break-word;
+`;
+
 export default function HomePage() {
+  const [term, setTerm] = useState("");
+  const [hits, setHits] = useState<SearchHit[] | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  async function runSearch(e: React.FormEvent) {
+    e.preventDefault();
+    if (!term.trim()) { setHits(null); return; }
+    setLoading(true);
+    try {
+      setHits(await searchCatalog(term));
+    } catch {
+      setHits([]);
+    } finally {
+      setLoading(false);
+    }
+  }
+
   return (
     <Page>
       <Shell>
@@ -58,19 +110,35 @@ export default function HomePage() {
 
           <Section>
             <GroupBox label="Search">
-              <SearchRow>
+              <SearchRow onSubmit={runSearch}>
                 <TextInput
-                  placeholder="search the on-chain web — coming soon"
-                  disabled
+                  placeholder="search dApps, tables, posts…"
+                  value={term}
+                  onChange={(e) => setTerm(e.target.value)}
                   style={{ flex: 1 }}
                 />
-                <Button disabled>Search</Button>
+                <Button type="submit" disabled={loading || !term.trim()}>
+                  {loading ? "…" : "Search"}
+                </Button>
               </SearchRow>
-              <p style={{ fontSize: FONT.meta, marginTop: 8, opacity: 0.7 }}>
-                Future: type anything. Identifier-shaped input (.sol / pubkey /
-                tx sig) routes via the resolver; everything else hits the
-                gateway-wide catalog. Until then, use the explorer below.
-              </p>
+              {hits !== null && (
+                <ResultList>
+                  {hits.length === 0 && (
+                    <li style={{ fontSize: FONT.meta, opacity: 0.6, padding: "4px 0" }}>
+                      no results
+                    </li>
+                  )}
+                  {hits.map((h) => (
+                    <ResultCard key={`${h.kind}:${h.id}`}>
+                      <Breadcrumb>
+                        {h.kind}{h.dbroot ? ` · ${h.dbroot}` : ""}
+                      </Breadcrumb>
+                      <Title>{h.label}</Title>
+                      {h.snippet && h.snippet !== h.label && <Snippet>{h.snippet}</Snippet>}
+                    </ResultCard>
+                  ))}
+                </ResultList>
+              )}
             </GroupBox>
           </Section>
 
