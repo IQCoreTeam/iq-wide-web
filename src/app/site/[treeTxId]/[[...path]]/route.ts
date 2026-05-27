@@ -3,8 +3,13 @@
 // /site/{treeTxId}/... funnels through here and we replay the gateway's
 // /site/{treeTxId}/... response. Because the page sees itself at that path
 // on OUR host, its own relative URLs (./style.css, /logo.png) resolve back
-// to us and we proxy them too — no <base href> trickery, no surprise effect
-// on ES module imports or import.meta.url.
+// to us and we proxy them too.
+//
+// HTML special case: the proxy.ts middleware passes ?ident=... when it
+// rewrites /{ident} → here. We inject <base href="/{ident}/"> into the
+// served HTML so relative links like <link href="assets/style.css"> resolve
+// to /{ident}/assets/style.css (which the middleware proxies back here)
+// instead of /assets/style.css (which 404s on our host).
 
 import { NextResponse } from "next/server";
 import { GATEWAY_URL } from "@/lib/constants";
@@ -14,7 +19,17 @@ interface Params {
   path?: string[];
 }
 
-export async function GET(_req: Request, ctx: { params: Promise<Params> }) {
+function injectBase(html: string, ident: string): string {
+  const baseTag = `<base href="/${ident}/">`;
+  // Most deployed iqpages sites have a plain <head>...</head>. Insert <base>
+  // as the first child so it takes effect before any other URL in <head>
+  // (favicon, stylesheet, script) is resolved.
+  if (html.includes("<head>")) return html.replace("<head>", `<head>${baseTag}`);
+  if (html.includes("<head ")) return html.replace(/<head\b[^>]*>/, (m) => `${m}${baseTag}`);
+  return `${baseTag}${html}`;
+}
+
+export async function GET(req: Request, ctx: { params: Promise<Params> }) {
   const { treeTxId, path } = await ctx.params;
   const tail = (path ?? []).join("/");
   const upstreamUrl = tail
@@ -25,8 +40,20 @@ export async function GET(_req: Request, ctx: { params: Promise<Params> }) {
   if (!upstream.ok) {
     return new NextResponse(`gateway said ${upstream.status}`, { status: upstream.status });
   }
+
+  const contentType = upstream.headers.get("content-type") ?? "application/octet-stream";
+  const ident = new URL(req.url).searchParams.get("ident");
+
+  if (ident && contentType.startsWith("text/html")) {
+    const html = await upstream.text();
+    return new NextResponse(injectBase(html, ident), {
+      status: 200,
+      headers: { "content-type": contentType },
+    });
+  }
+
   return new NextResponse(upstream.body, {
     status: 200,
-    headers: { "content-type": upstream.headers.get("content-type") ?? "application/octet-stream" },
+    headers: { "content-type": contentType },
   });
 }

@@ -76,19 +76,12 @@ export async function proxy(req: NextRequest) {
     const resolved = await cachedResolve(first);
     if (!resolved) return NextResponse.next();
 
-    // If the URL is exactly /{ident} with no trailing slash, redirect to
-    // /{ident}/. Otherwise the served HTML's relative links like
-    // <link href="assets/style.css"> resolve to /assets/style.css against
-    // the root, miss the proxy, and 404. The trailing-slash form makes
-    // them resolve to /{ident}/assets/style.css, which we proxy correctly.
-    if (rest.length === 0 && !req.nextUrl.pathname.endsWith("/")) {
-      const redirectUrl = req.nextUrl.clone();
-      redirectUrl.pathname = `/${first}/`;
-      return NextResponse.redirect(redirectUrl, 308);
-    }
-
     const url = req.nextUrl.clone();
     url.pathname = `/site/${resolved.treeTxId}/${rest.length ? rest.join("/") : resolved.entry}`;
+    // The site route needs to know the ident to inject <base href="/{ident}/">
+    // into served HTML, so relative asset URLs in the deployed site resolve
+    // back to /{ident}/... (which we proxy) instead of root (which we don't).
+    url.searchParams.set("ident", first);
     return NextResponse.rewrite(url);
   }
 
