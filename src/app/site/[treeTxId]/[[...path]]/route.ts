@@ -42,7 +42,10 @@ export async function GET(req: Request, ctx: { params: Promise<Params> }) {
   }
 
   const contentType = upstream.headers.get("content-type") ?? "application/octet-stream";
-  const ident = new URL(req.url).searchParams.get("ident");
+  // proxy.ts sets x-iqpages-ident on the request when it rewrites /{ident}
+  // → /site/.... Query strings get dropped across Next's rewrite boundary,
+  // so we use a header instead.
+  const ident = req.headers.get("x-iqpages-ident");
 
   if (ident && contentType.startsWith("text/html")) {
     const html = await upstream.text();
