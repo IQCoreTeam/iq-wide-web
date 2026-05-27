@@ -31,19 +31,44 @@ function cachedResolve(ident: string): Promise<Resolved> {
 const PUBKEY_RE = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
 const isIdent = (s: string) => s.toLowerCase().endsWith(".sol") || PUBKEY_RE.test(s);
 
+// Pull an ident out of the Referer header, if it points at /{ident}/... on
+// our host. Used to route deployed sites' root-absolute assets (e.g. when
+// the HTML has <script src="/src/app.js">) back into /site/{treeTxId}/...
+function identFromReferer(req: NextRequest): string | null {
+  const ref = req.headers.get("referer");
+  if (!ref) return null;
+  let url: URL;
+  try { url = new URL(ref); } catch { return null; }
+  if (url.host !== req.nextUrl.host) return null;
+  const first = url.pathname.split("/").filter(Boolean)[0];
+  return first && isIdent(first) ? first : null;
+}
+
 export async function proxy(req: NextRequest) {
   const parts = req.nextUrl.pathname.split("/").filter(Boolean);
   if (parts.length === 0) return NextResponse.next();
-  const [ident, ...rest] = parts;
-  if (!isIdent(ident)) return NextResponse.next();
+  const [first, ...rest] = parts;
 
+  // Case 1: the first segment is itself an ident — visitor typed /{ident}
+  // or /{ident}/{sub-path}. Resolve and rewrite as before.
+  if (isIdent(first)) {
+    const resolved = await cachedResolve(first);
+    if (!resolved) return NextResponse.next();
+    const url = req.nextUrl.clone();
+    url.pathname = `/site/${resolved.treeTxId}/${rest.length ? rest.join("/") : resolved.entry}`;
+    return NextResponse.rewrite(url);
+  }
+
+  // Case 2: not an ident — but deployed sites often ship HTML with
+  // root-absolute asset paths (`/assets/style.css`). The browser fetches
+  // those without the ident prefix. Use the Referer to recover which
+  // deployed site the asset belongs to.
+  const ident = identFromReferer(req);
+  if (!ident) return NextResponse.next();
   const resolved = await cachedResolve(ident);
   if (!resolved) return NextResponse.next();
-
-  // /{ident}            → /site/{treeTxId}/{entry}    (deploy-time entry, e.g. gameboy.html)
-  // /{ident}/{...path}  → /site/{treeTxId}/{...path}  (asset / sub-route as-is)
   const url = req.nextUrl.clone();
-  url.pathname = `/site/${resolved.treeTxId}/${rest.length ? rest.join("/") : resolved.entry}`;
+  url.pathname = `/site/${resolved.treeTxId}/${parts.join("/")}`;
   return NextResponse.rewrite(url);
 }
 
