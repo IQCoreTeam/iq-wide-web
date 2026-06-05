@@ -136,7 +136,7 @@ export function ProfileEditor({
                 <TextInput
                   value={profilePicture}
                   onChange={(e) => setProfilePicture(e.target.value)}
-                  placeholder="https://… or txId"
+                  placeholder="https://… or on-chain txId"
                   fullWidth
                 />
               </Field>

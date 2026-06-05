@@ -66,6 +66,21 @@ export async function fetchTxDataViaGateway(txId: string): Promise<string | null
   }
 }
 
+/** Resolves a `profilePicture` value into an <img src>.
+ *
+ *  Already-a-URL (http/https/data:) passes through untouched. A bare base58
+ *  string is an on-chain txId — point it at the gateway's /img route, which
+ *  reads the userInventory codeIn tx and streams back raw image bytes with an
+ *  image/* Content-Type, so the browser renders it directly. The 80-char floor
+ *  matches the gateway's own signature guard. */
+export function resolveProfilePictureSrc(value?: string): string | undefined {
+  const v = value?.trim();
+  if (!v) return undefined;
+  if (/^(https?:|data:|\/\/)/.test(v)) return v;
+  const isTxId = v.length >= 80 && v.length <= 100 && /^[1-9A-HJ-NP-Za-km-z]+$/.test(v);
+  return isTxId ? `${GATEWAY_URL}/img/${v}` : v;
+}
+
 export async function parseMetadata(raw: string): Promise<ProfileMeta | null> {
   if (!raw || raw.length <= 2) return null;
   try {

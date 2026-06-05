@@ -15,7 +15,7 @@ import {
   WindowContent,
   WindowHeader,
 } from "react95";
-import type { ProfileMeta } from "@/lib/profile/profile";
+import { resolveProfilePictureSrc, type ProfileMeta } from "@/lib/profile/profile";
 import { SOCIAL_PLATFORMS } from "@/lib/profile/socials";
 import { FONT } from "@/lib/ui/typography";
 
@@ -126,8 +126,13 @@ export function ProfileCard({
       <WindowContent>
         <Column>
           <AvatarFrame>
-            {profile?.profilePicture ? (
-              <Avatar size={112} square src={profile.profilePicture} alt="" />
+            {resolveProfilePictureSrc(profile?.profilePicture) ? (
+              <Avatar
+                size={112}
+                square
+                src={resolveProfilePictureSrc(profile?.profilePicture)}
+                alt=""
+              />
             ) : (
               <Avatar size={112} square>?</Avatar>
             )}
