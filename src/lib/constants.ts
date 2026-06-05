@@ -10,8 +10,12 @@ export const ROOT_ID = process.env.NEXT_PUBLIC_ROOT_ID || "iqprofile-root";
 /** IQDB root used by IQ Pages deployments. Shared across ecosystem apps. */
 export const IQPAGES_ROOT_ID = "iqpages-root";
 
-/** Solana RPC endpoint. Same Helius key as on-chaingit-frontend so the
- *  browser-origin whitelist already covers this domain. */
+/** Solana RPC endpoint. Shares on-chaingit-frontend's Helius key, but Helius
+ *  origin allowlisting is PER-DOMAIN exact-match, not per-key: every origin
+ *  that serves this app (e.g. browser.iqlabs.dev AND any *.sol domain like
+ *  zo.sol) must be added to the key's Allowed Origins in the Helius dashboard,
+ *  or browser RPC calls fail CORS preflight ("No Access-Control-Allow-Origin").
+ *  Reusing the key does NOT inherit the other app's domains. */
 export const RPC_URL =
   process.env.NEXT_PUBLIC_RPC_URL ||
   "https://mainnet.helius-rpc.com/?api-key=fbb113ce-eeb4-4277-8c44-7153632d175a";
