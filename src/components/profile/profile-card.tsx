@@ -15,7 +15,11 @@ import {
   WindowContent,
   WindowHeader,
 } from "react95";
-import { resolveProfilePictureSrc, type ProfileMeta } from "@/lib/profile/profile";
+import {
+  profilePictureTxId,
+  resolveProfilePictureSrc,
+  type ProfileMeta,
+} from "@/lib/profile/profile";
 import { SOCIAL_PLATFORMS } from "@/lib/profile/socials";
 import { FONT } from "@/lib/ui/typography";
 
@@ -26,6 +30,35 @@ function shortWallet(w: string) {
 const AvatarFrame = styled(Frame).attrs({ variant: "outside", shadow: false })`
   padding: 12px;
   display: inline-block;
+  position: relative;
+`;
+
+/** Little Win95-style chip pinned to the avatar's corner, marking the picture
+ *  as living on-chain. Uses the theme's raised-button look so it reads as part
+ *  of the react95 surface rather than a flat web badge. */
+const OnChainBadge = styled.span`
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  font-size: ${FONT.meta}px;
+  font-weight: 700;
+  line-height: 1;
+  color: ${({ theme }) => theme.materialText};
+  background: ${({ theme }) => theme.material};
+  border-top: 2px solid ${({ theme }) => theme.borderLightest};
+  border-left: 2px solid ${({ theme }) => theme.borderLightest};
+  border-bottom: 2px solid ${({ theme }) => theme.borderDarkest};
+  border-right: 2px solid ${({ theme }) => theme.borderDarkest};
+`;
+
+const OnChainRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
 `;
 
 const Bio = styled.p`
@@ -86,6 +119,9 @@ export function ProfileCard({
   const [copiedAddr, setCopiedAddr] = useState(false);
   const [shared, setShared] = useState(false);
 
+  const pictureTxId = profilePictureTxId(profile?.profilePicture);
+  const pictureSrc = resolveProfilePictureSrc(profile?.profilePicture);
+
   const copyAddress = async () => {
     await navigator.clipboard.writeText(walletAddress);
     setCopiedAddr(true);
@@ -126,17 +162,35 @@ export function ProfileCard({
       <WindowContent>
         <Column>
           <AvatarFrame>
-            {resolveProfilePictureSrc(profile?.profilePicture) ? (
-              <Avatar
-                size={112}
-                square
-                src={resolveProfilePictureSrc(profile?.profilePicture)}
-                alt=""
-              />
+            {pictureSrc ? (
+              <Avatar size={112} square src={pictureSrc} alt="" />
             ) : (
               <Avatar size={112} square>?</Avatar>
             )}
+            {pictureTxId && (
+              <Tooltip text="This picture is stored on-chain" enterDelay={300}>
+                <OnChainBadge>◆ ON-CHAIN</OnChainBadge>
+              </Tooltip>
+            )}
           </AvatarFrame>
+
+          {pictureTxId && (
+            <OnChainRow>
+              <Button
+                variant="menu"
+                size="sm"
+                onClick={() =>
+                  window.open(
+                    `https://solscan.io/tx/${pictureTxId}`,
+                    "_blank",
+                    "noopener,noreferrer",
+                  )
+                }
+              >
+                View on Solscan ↗
+              </Button>
+            </OnChainRow>
+          )}
 
           <h1 style={{ fontSize: FONT.title, fontWeight: 700, margin: 0 }}>
             {profile?.name || shortWallet(walletAddress)}

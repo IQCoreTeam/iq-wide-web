@@ -73,12 +73,20 @@ export async function fetchTxDataViaGateway(txId: string): Promise<string | null
  *  reads the userInventory codeIn tx and streams back raw image bytes with an
  *  image/* Content-Type, so the browser renders it directly. The 80-char floor
  *  matches the gateway's own signature guard. */
+/** Returns the bare base58 txId if `value` is an on-chain reference (not a
+ *  URL), else undefined. Same 80–100 char base58 shape the gateway accepts. */
+export function profilePictureTxId(value?: string): string | undefined {
+  const v = value?.trim();
+  if (!v || /^(https?:|data:|\/\/)/.test(v)) return undefined;
+  const isTxId = v.length >= 80 && v.length <= 100 && /^[1-9A-HJ-NP-Za-km-z]+$/.test(v);
+  return isTxId ? v : undefined;
+}
+
 export function resolveProfilePictureSrc(value?: string): string | undefined {
   const v = value?.trim();
   if (!v) return undefined;
-  if (/^(https?:|data:|\/\/)/.test(v)) return v;
-  const isTxId = v.length >= 80 && v.length <= 100 && /^[1-9A-HJ-NP-Za-km-z]+$/.test(v);
-  return isTxId ? `${GATEWAY_URL}/img/${v}` : v;
+  const txId = profilePictureTxId(v);
+  return txId ? `${GATEWAY_URL}/img/${txId}` : v;
 }
 
 export async function parseMetadata(raw: string): Promise<ProfileMeta | null> {
