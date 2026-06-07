@@ -29,15 +29,45 @@ function injectBase(html: string, ident: string): string {
   return `${baseTag}${html}`;
 }
 
+// Upstream headers worth replaying to the client. Range/caching/validation
+// headers must survive the proxy hop — without them iOS Safari refuses to play
+// <video>/<audio> (it needs 206 + Accept-Ranges/Content-Range to stream media).
+const PASSTHROUGH_HEADERS = [
+  "content-type",
+  "content-range",
+  "accept-ranges",
+  "content-length",
+  "cache-control",
+  "etag",
+  "last-modified",
+];
+
+function replayHeaders(upstream: Response): Headers {
+  const headers = new Headers();
+  for (const name of PASSTHROUGH_HEADERS) {
+    const v = upstream.headers.get(name);
+    if (v) headers.set(name, v);
+  }
+  return headers;
+}
+
 export async function GET(req: Request, ctx: { params: Promise<Params> }) {
   const { treeTxId, path } = await ctx.params;
   const tail = (path ?? []).join("/");
   const upstreamUrl = tail
     ? `${GATEWAY_URL}/site/${treeTxId}/${tail}`
     : `${GATEWAY_URL}/site/${treeTxId}`;
-  const upstream = await fetch(upstreamUrl);
 
-  if (!upstream.ok) {
+  // Forward the client's Range (and validators) so the gateway can answer with
+  // a 206 partial response instead of a full 200 the browser then rejects.
+  const fwd = new Headers();
+  for (const name of ["range", "if-none-match", "if-range"]) {
+    const v = req.headers.get(name);
+    if (v) fwd.set(name, v);
+  }
+  const upstream = await fetch(upstreamUrl, { headers: fwd });
+
+  if (upstream.status >= 400) {
     return new NextResponse(`gateway said ${upstream.status}`, { status: upstream.status });
   }
 
@@ -55,8 +85,9 @@ export async function GET(req: Request, ctx: { params: Promise<Params> }) {
     });
   }
 
+  // Replay the gateway's status (200/206/304) and media headers verbatim.
   return new NextResponse(upstream.body, {
-    status: 200,
-    headers: { "content-type": contentType },
+    status: upstream.status,
+    headers: replayHeaders(upstream),
   });
 }
