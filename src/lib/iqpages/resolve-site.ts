@@ -7,6 +7,7 @@
 
 import { GATEWAY_URL } from "@/lib/constants";
 import { recordTarget } from "@/resolver/shape";
+import { COMMIT_SCAN_LIMIT, latestOwnerCommit } from "./latest-commit";
 import { DEPLOYED_TABLE_PDA } from "./constants";
 
 const PUBKEY_RE = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
@@ -26,7 +27,7 @@ interface SnsResult { owner: string | null; record: string | null }
 interface TableMeta { name: string }
 interface RowsResult<T> { rows?: T[] }
 interface DeployedRow { id: string; owner: string; repo: string }
-interface CommitRow { treeTxId: string }
+interface CommitRow { treeTxId: string; __signer?: string }
 interface Manifest { indexPath: string; files: Record<string, string> }
 
 /** Pick the file to serve when the visitor hits /{ident} with no path. The
@@ -76,9 +77,10 @@ export async function resolveDeployedSite(
   const id = `${owner}:${repo}`;
   if (!deployed?.rows?.some((r) => r.id === id)) return null;
 
-  // Latest commit on this repo carries the treeTxId we serve from.
-  const commits = await gwJson<RowsResult<CommitRow>>(`/table/${pubkey}/rows?limit=1`);
-  const treeTxId = commits?.rows?.[0]?.treeTxId;
+  // Serve from the latest commit the table owner actually signed — anyone can
+  // append a row, so we skip rows signed by non-owners (see latest-commit.ts).
+  const commits = await gwJson<RowsResult<CommitRow>>(`/table/${pubkey}/rows?limit=${COMMIT_SCAN_LIMIT}`);
+  const treeTxId = latestOwnerCommit(commits?.rows ?? [], owner);
   if (!treeTxId) return null;
 
   const entry = await pickEntry(treeTxId);

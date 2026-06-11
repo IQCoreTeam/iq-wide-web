@@ -5,6 +5,7 @@
 
 import { PublicKey } from "@solana/web3.js";
 import iqlabs from "iqlabs-sdk";
+import { COMMIT_SCAN_LIMIT, latestOwnerRow } from "../iqpages/latest-commit";
 
 const PRIMARY_GATEWAY = "https://gateway.iqlabs.dev";
 const BACKUP_GATEWAY = "https://gateway.iqlabs.dev";
@@ -97,11 +98,14 @@ interface CommitRow {
   parentCommitId?: string;
   timestamp: number;
   author: string;
+  __signer?: string;
 }
 
+// Anyone can append a row to a repo's commit table, so we serve the latest one
+// the table owner actually signed (see latest-commit.ts), not just rows[0].
 export async function readLatestCommit(owner: string, repo: string): Promise<CommitRow | null> {
-  const rows = await readTableRowsGW<CommitRow>(gitTablePda(COMMIT_HINT(owner, repo)), 1);
-  return rows[0] ?? null;
+  const rows = await readTableRowsGW<CommitRow>(gitTablePda(COMMIT_HINT(owner, repo)), COMMIT_SCAN_LIMIT);
+  return latestOwnerRow(rows, owner);
 }
 
 export async function loadTree(treeTxId: string): Promise<Record<string, { txId: string; hash: string }>> {
