@@ -6,6 +6,7 @@
 // Edge-runtime safe: only uses fetch + JSON. No iqlabs-sdk, no @solana/web3.js.
 
 import { GATEWAY_URL } from "@/lib/constants";
+import { recordTarget } from "@/resolver/shape";
 import { DEPLOYED_TABLE_PDA } from "./constants";
 
 const PUBKEY_RE = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
@@ -50,7 +51,7 @@ async function snsResolve(ident: string): Promise<string | null> {
   }
   const sns = await gwJson<SnsResult>(`/sns/${ident}`);
   if (!sns) return null;
-  return sns.record ?? sns.owner;
+  return sns.record ? recordTarget(sns.record) : sns.owner;
 }
 
 /** Resolve to {treeTxId, entry} when ident is a deployed git repo; otherwise

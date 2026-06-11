@@ -6,6 +6,13 @@ import type { Shape } from "./types";
 const PUBKEY_RE = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
 const SIG_RE = /^[1-9A-HJ-NP-Za-km-z]{87,88}$/;
 
+// Owners sometimes set a SOL record to a browser URL ("browser.iqlabs.dev/<PDA>")
+// instead of a bare pubkey. Take the last path segment so a URL-shaped record and
+// a bare pubkey both reduce to the target — strip a trailing slash and any query.
+export function recordTarget(record: string): string {
+  return record.split(/[?#]/, 1)[0].replace(/\/+$/, "").split("/").pop() ?? "";
+}
+
 export function shapeOf(raw: string | undefined | null): Shape {
   if (!raw) return "invalid";
   const s = raw.trim();

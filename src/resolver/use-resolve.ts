@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { shapeOf } from "./shape";
+import { shapeOf, recordTarget } from "./shape";
 import { fetchDbRoots, matchPubkey } from "./dbroots";
 import { fetchSnsResolution } from "./sns";
 import type { IdentifierKind } from "./types";
@@ -26,7 +26,7 @@ async function resolve(ident: string): Promise<IdentifierKind> {
       // domain target any wallet/PDA), otherwise the domain owner itself ("the
       // domain just is that wallet"). Then resolve that pubkey like any other.
       const { owner, record } = await fetchSnsResolution(ident);
-      const target = record ?? owner;
+      const target = record ? recordTarget(record) : owner;
       return target ? resolvePubkey(target) : { kind: "not-found", ident };
     }
     default:
