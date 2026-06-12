@@ -26,6 +26,12 @@ export const RPC_URL =
  */
 export const GATEWAY_URL = "https://gateway.iqlabs.dev";
 
+/** IQ Wide Web (this app's public origin). A deployed IQ Pages site is opened
+ *  as `${BROWSER_URL}/{commitTablePda}` — the resolver there picks the owner's
+ *  latest commit + entry itself, so the link stays correct across re-commits
+ *  without us pinning a treeTxId (unlike a raw `${GATEWAY_URL}/site/...` URL). */
+export const BROWSER_URL = "https://browser.iqlabs.dev";
+
 /** SolChat origin — deep link target for the SolChat tab. User URL:
  *  `${SOLCHAT_URL}/u/{walletAddress}`. */
 export const SOLCHAT_URL = "https://chat.iqlabs.dev";

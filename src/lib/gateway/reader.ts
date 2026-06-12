@@ -91,6 +91,12 @@ function gitTablePda(hint: string): PublicKey {
   return iqlabs.contract.getTablePda(DB_ROOT, iqlabs.utils.toSeedBytes(hint), PROGRAM_ID);
 }
 
+/** base58 of a repo's git_commits table PDA — the path segment for a
+ *  `${BROWSER_URL}/{pda}` deep link to the deployed site. */
+export function commitTablePda(owner: string, repo: string): string {
+  return gitTablePda(COMMIT_HINT(owner, repo)).toBase58();
+}
+
 interface CommitRow {
   id: string;
   message: string;

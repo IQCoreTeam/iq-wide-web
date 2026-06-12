@@ -70,7 +70,7 @@ export function AppPanel({ walletAddress }: { walletAddress: string }) {
               {tab === "solchat" && <SolChatTab walletAddress={walletAddress} />}
               {tab === "iqchan" && <IqChanTab walletAddress={walletAddress} />}
               {tab === "iqgit" && <IqGitTab walletAddress={walletAddress} />}
-              {tab === "unofficial" && <UnofficialAppsDropdown walletAddress={walletAddress} />}
+              {tab === "unofficial" && <UnofficialAppsDropdown />}
             </TabsBody>
           </ScrollView>
         </WindowContent>

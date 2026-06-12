@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import styled from "styled-components";
 import {
   Anchor,
@@ -9,11 +9,10 @@ import {
   Hourglass,
   Select,
 } from "react95";
-import { IQGIT_URL } from "@/lib/constants";
+import { BROWSER_URL, IQGIT_URL } from "@/lib/constants";
+import { commitTablePda } from "@/lib/gateway/reader";
 import {
-  buildLaunchUrl,
   useIqpagesList,
-  useResolveLaunchTarget,
   type Deployment,
 } from "@/lib/iqpages/use-iqpages-data";
 import { FONT } from "@/lib/ui/typography";
@@ -67,9 +66,8 @@ function dyorKey(owner: string, repo: string) {
 
 const appKey = (d: Pick<Deployment, "owner" | "repo">) => `${d.owner}/${d.repo}`;
 
-export function UnofficialAppsDropdown({ walletAddress }: { walletAddress: string }) {
+export function UnofficialAppsDropdown() {
   const { data: deployments, isLoading, error } = useIqpagesList();
-  const resolveTarget = useResolveLaunchTarget();
 
   const options = useMemo(
     () =>
@@ -80,28 +78,26 @@ export function UnofficialAppsDropdown({ walletAddress }: { walletAddress: strin
     [deployments],
   );
 
-  // Default to the first deployment so react95's Select has a matching
-  // option from the start.
+  // The deployment the dropdown acts on: an explicit pick, else the first
+  // option once the list loads. Derived (no effect) so react95's Select always
+  // has a matching value without a cascading-render setState.
   const firstKey = options[0]?.value ?? "";
-  const [selectedKey, setSelectedKey] = useState<string>(firstKey);
-  useEffect(() => {
-    if (!selectedKey && firstKey) setSelectedKey(firstKey);
-  }, [firstKey, selectedKey]);
+  const [picked, setPicked] = useState<string>("");
+  const selectedKey = picked || firstKey;
 
   const [pending, setPending] = useState<Deployment | null>(null);
   const [opening, setOpening] = useState(false);
   const [openError, setOpenError] = useState<string | null>(null);
 
-  const launch = async (d: Deployment) => {
+  const launch = (d: Deployment) => {
     setOpening(true);
     setOpenError(null);
     try {
-      const target = await resolveTarget(d.owner, d.repo);
-      if (!target) {
-        setOpenError(`No commits in ${d.owner.slice(0, 4)}…/${d.repo}`);
-        return;
-      }
-      const url = buildLaunchUrl(target, walletAddress);
+      // Open the site on browser.iqlabs.dev by its commit-table PDA — the
+      // resolver there serves the owner's latest commit + entry, so the link
+      // survives re-commits without us pinning a treeTxId or pre-reading the
+      // commit table (unlike a gateway /site/<treeTxId> URL).
+      const url = `${BROWSER_URL}/${commitTablePda(d.owner, d.repo)}`;
       window.localStorage.setItem(dyorKey(d.owner, d.repo), "1");
       window.open(url, "_blank", "noopener,noreferrer");
       setPending(null);
@@ -117,7 +113,7 @@ export function UnofficialAppsDropdown({ walletAddress }: { walletAddress: strin
     const match = (deployments ?? []).find((d) => appKey(d) === selectedKey);
     if (!match) return;
     if (window.localStorage.getItem(dyorKey(match.owner, match.repo))) {
-      void launch(match);
+      launch(match);
       return;
     }
     setPending(match);
@@ -158,7 +154,7 @@ export function UnofficialAppsDropdown({ walletAddress }: { walletAddress: strin
               <Button size="sm" onClick={() => setPending(null)} disabled={opening}>
                 Cancel
               </Button>
-              <Button size="sm" primary onClick={() => void launch(pending)} disabled={opening}>
+              <Button size="sm" primary onClick={() => launch(pending)} disabled={opening}>
                 {opening ? "Opening…" : "Open"}
               </Button>
             </ConfirmActions>
@@ -168,7 +164,7 @@ export function UnofficialAppsDropdown({ walletAddress }: { walletAddress: strin
             <Select
               value={selectedKey}
               options={options}
-              onChange={(o) => setSelectedKey(o.value)}
+              onChange={(o) => setPicked(o.value)}
               width="100%"
             />
             <Button size="sm" onClick={openSelected} disabled={!selectedKey || opening}>
