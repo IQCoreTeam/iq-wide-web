@@ -131,14 +131,19 @@ export async function proxy(req: NextRequest) {
       const subPath = reqPath === "/" || reqPath === "" ? "" : reqPath.replace(/^\//, "");
       const record = interpretUrlRecord(url);
 
+      // Under host-routing the site lives at the host root, so its own
+      // root-relative/relative asset URLs resolve correctly as-is — and every
+      // asset request re-enters here via the same Host header and gets routed
+      // again. So we must NOT inject <base href="/{ident}/"> (that's only for
+      // path-based /{ident} access); doing so would make the browser fetch
+      // /{ident}/styles.css, which isn't the asset. Hence no x-iqpages-ident.
+
       // "/site/<sig>" URL → serve that manifest directly (nubs model).
       if (record.kind === "site") {
         const tail = subPath || record.entry;
         const dest = req.nextUrl.clone();
         dest.pathname = `/site/${record.sig}/${tail}`;
-        const headers = new Headers(req.headers);
-        headers.set("x-iqpages-ident", wrapName);
-        return NextResponse.rewrite(dest, { request: { headers } });
+        return NextResponse.rewrite(dest);
       }
 
       // Otherwise the record reduced to an ident (e.g. a deployed-site PDA).
@@ -150,9 +155,7 @@ export async function proxy(req: NextRequest) {
         const tail = subPath || resolved.entry;
         const dest = req.nextUrl.clone();
         dest.pathname = `/site/${resolved.treeTxId}/${tail}`;
-        const headers = new Headers(req.headers);
-        headers.set("x-iqpages-ident", wrapName);
-        return NextResponse.rewrite(dest, { request: { headers } });
+        return NextResponse.rewrite(dest);
       }
     }
     // No URL record (or unresolved) → fall through to the client app.
