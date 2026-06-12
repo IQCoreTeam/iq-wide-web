@@ -93,16 +93,25 @@ async function fetchUrlRecord(name: string): Promise<string | null> {
 
 const SITE_URL_RE = /\/site\/([1-9A-HJ-NP-Za-km-z]{86,90})\/?(.*)$/;
 
-// Interpret a raw URL record into how we should serve it:
-//  - a "/site/<sig>/<file>" URL  → serve that manifest directly (nubs model)
-//  - anything else               → reduce to an ident (last path segment, e.g.
-//                                   a <pda>) and run it through the dispatcher.
+const TX_SIG_RE = /^[1-9A-HJ-NP-Za-km-z]{86,90}$/;
+
+// Interpret a raw URL record into how we should serve it. The owner can store
+// any of these shapes — we accept them all:
+//  - "gateway.iqlabs.dev/site/<sig>/<file>"  → serve that manifest directly
+//  - a bare 86–90 char tx signature          → serve /site/<sig> directly
+//  - "browser.iqlabs.dev/<pda>" or a bare <pda> → reduce to an ident (the last
+//    path segment) and run it through the dispatcher (repo/wallet/site view).
 function interpretUrlRecord(
   url: string,
 ): { kind: "site"; sig: string; entry: string } | { kind: "ident"; ident: string } {
+  // Full /site/<sig>/<file> URL → sig + entry path.
   const m = url.match(SITE_URL_RE);
   if (m) return { kind: "site", sig: m[1], entry: m[2] || "" };
-  return { kind: "ident", ident: recordTarget(url) };
+  // Strip any host/scheme prefix down to the last segment, then classify by
+  // shape: a tx signature serves a manifest; anything shorter is an ident.
+  const target = recordTarget(url);
+  if (TX_SIG_RE.test(target)) return { kind: "site", sig: target, entry: "" };
+  return { kind: "ident", ident: target };
 }
 
 // Pull an ident out of the Referer header, if it points at /{ident}/... on
