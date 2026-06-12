@@ -12,6 +12,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { resolveDeployedSite } from "@/lib/iqpages/resolve-site";
+import { recordTarget } from "@/resolver/shape";
 import { GATEWAY_URL } from "@/lib/constants";
 
 const CACHE_TTL_MS = 5 * 60 * 1000;
@@ -74,27 +75,34 @@ function snsNameFromHost(host: string): string | null {
   return null;
 }
 
-// Ask the gateway to read the wrapping domain's on-chain URL record. The
-// /sns/{name}/record endpoint reads the URL record and 302s to
-// /site/{sig}/{file} — exactly what nubs.sol.site relied on. We just follow
-// that redirect ourselves (manual, so we read the Location instead of fetching
-// the site) and return {sig, entry}. Edge-safe: fetch + header read only.
-async function resolveWrappedSite(
-  name: string,
-): Promise<{ sig: string; entry: string } | null> {
-  let loc: string | null;
+// Read the wrapping domain's raw URL record via the gateway. The owner puts the
+// link they want here (e.g. "browser.iqlabs.dev/<pda>" or
+// "gateway.iqlabs.dev/site/<sig>/<file>"); we interpret whatever shape it is.
+// Edge-safe: fetch + JSON only.
+async function fetchUrlRecord(name: string): Promise<string | null> {
   try {
-    const res = await fetch(`${GATEWAY_URL}/sns/${name}/record`, { redirect: "manual" });
-    loc = res.headers.get("location");
+    const res = await fetch(`${GATEWAY_URL}/sns/${name}/url`);
+    if (!res.ok) return null;
+    const data = (await res.json()) as { url?: string | null };
+    return data.url ?? null;
   } catch (e) {
-    console.warn(`[proxy] sns record fetch failed: ${name}`, e);
+    console.warn(`[proxy] url record fetch failed: ${name}`, e);
     return null;
   }
-  if (!loc) return null;
-  // loc looks like "/site/<86-90 char sig>/<entry...>"
-  const m = loc.match(/^\/site\/([1-9A-HJ-NP-Za-km-z]{86,90})\/?(.*)$/);
-  if (!m) return null;
-  return { sig: m[1], entry: m[2] || "" };
+}
+
+const SITE_URL_RE = /\/site\/([1-9A-HJ-NP-Za-km-z]{86,90})\/?(.*)$/;
+
+// Interpret a raw URL record into how we should serve it:
+//  - a "/site/<sig>/<file>" URL  → serve that manifest directly (nubs model)
+//  - anything else               → reduce to an ident (last path segment, e.g.
+//                                   a <pda>) and run it through the dispatcher.
+function interpretUrlRecord(
+  url: string,
+): { kind: "site"; sig: string; entry: string } | { kind: "ident"; ident: string } {
+  const m = url.match(SITE_URL_RE);
+  if (m) return { kind: "site", sig: m[1], entry: m[2] || "" };
+  return { kind: "ident", ident: recordTarget(url) };
 }
 
 // Pull an ident out of the Referer header, if it points at /{ident}/... on
@@ -111,24 +119,43 @@ function identFromReferer(req: NextRequest): string | null {
 }
 
 export async function proxy(req: NextRequest) {
-  // Host-routing (nubs model): if a foreign domain CNAME'd into us, the request
-  // arrives with that domain in the Host header (e.g. "zo-iq.sol.site"). Before
-  // showing our own app, check whether the wrapping domain has an on-chain URL
-  // record — if so, serve THAT site at the wrapping URL, address bar unchanged.
+  // Host-routing: if a foreign domain CNAME'd into us, the request arrives with
+  // that domain in the Host header (e.g. "zo-iq.sol.site"). Read the wrapping
+  // domain's URL record and serve whatever the owner pointed it at — at the
+  // wrapping URL, address bar unchanged.
   const wrapName = snsNameFromHost(req.headers.get("host") ?? "");
   if (wrapName) {
-    const site = await resolveWrappedSite(wrapName);
-    if (site) {
+    const url = await fetchUrlRecord(wrapName);
+    if (url) {
       const reqPath = req.nextUrl.pathname;
-      // No sub-path → serve the entry the URL record baked in (e.g. gameboy.html).
-      const tail = reqPath === "/" || reqPath === "" ? site.entry : reqPath.replace(/^\//, "");
-      const dest = req.nextUrl.clone();
-      dest.pathname = `/site/${site.sig}/${tail}`;
-      const headers = new Headers(req.headers);
-      headers.set("x-iqpages-ident", wrapName);
-      return NextResponse.rewrite(dest, { request: { headers } });
+      const subPath = reqPath === "/" || reqPath === "" ? "" : reqPath.replace(/^\//, "");
+      const record = interpretUrlRecord(url);
+
+      // "/site/<sig>" URL → serve that manifest directly (nubs model).
+      if (record.kind === "site") {
+        const tail = subPath || record.entry;
+        const dest = req.nextUrl.clone();
+        dest.pathname = `/site/${record.sig}/${tail}`;
+        const headers = new Headers(req.headers);
+        headers.set("x-iqpages-ident", wrapName);
+        return NextResponse.rewrite(dest, { request: { headers } });
+      }
+
+      // Otherwise the record reduced to an ident (e.g. a deployed-site PDA).
+      // Run it through the same pipeline as /{ident}: a deployed site is
+      // rewritten into the proxy route; anything else falls through so the
+      // client app renders the matching (repo/wallet/...) view.
+      const resolved = await cachedResolve(record.ident);
+      if (resolved) {
+        const tail = subPath || resolved.entry;
+        const dest = req.nextUrl.clone();
+        dest.pathname = `/site/${resolved.treeTxId}/${tail}`;
+        const headers = new Headers(req.headers);
+        headers.set("x-iqpages-ident", wrapName);
+        return NextResponse.rewrite(dest, { request: { headers } });
+      }
     }
-    // Wrapping domain with no IQ record → fall through to normal app handling.
+    // No URL record (or unresolved) → fall through to the client app.
   }
 
   const parts = req.nextUrl.pathname.split("/").filter(Boolean);
