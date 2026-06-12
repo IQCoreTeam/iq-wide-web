@@ -52,6 +52,51 @@ async function cachedManifest(treeTxId: string): Promise<Manifest> {
 const PUBKEY_RE = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
 const isIdent = (s: string) => s.toLowerCase().endsWith(".sol") || PUBKEY_RE.test(s);
 
+// Hosts that ARE us — never treat these as a "wrapping" SNS domain. A request
+// whose Host is our own app (or local dev) is served normally; only a foreign
+// domain that CNAME'd into us gets the host-routing treatment below.
+const OWN_HOSTS = new Set(["browser.iqlabs.dev", "localhost", "127.0.0.1"]);
+
+// Turn a wrapping Host (e.g. "zo-iq.sol.site") into the SNS name to look up
+// ("zo-iq"). Returns null when the Host is one of ours or has no usable name.
+// Mirrors the gateway's host-routing: it strips a known public suffix and uses
+// the leading label as the .sol name. We accept ".sol.site" (sol.site infra)
+// and a bare ".sol" Host, which is all the gateway resolves today.
+function snsNameFromHost(host: string): string | null {
+  const h = host.toLowerCase().split(":")[0];
+  if (!h || OWN_HOSTS.has(h)) return null;
+  for (const suffix of [".sol.site", ".sol"]) {
+    if (h.endsWith(suffix)) {
+      const name = h.slice(0, -suffix.length);
+      return name && !name.includes(".") ? name : null;
+    }
+  }
+  return null;
+}
+
+// Ask the gateway to read the wrapping domain's on-chain URL record. The
+// /sns/{name}/record endpoint reads the URL record and 302s to
+// /site/{sig}/{file} — exactly what nubs.sol.site relied on. We just follow
+// that redirect ourselves (manual, so we read the Location instead of fetching
+// the site) and return {sig, entry}. Edge-safe: fetch + header read only.
+async function resolveWrappedSite(
+  name: string,
+): Promise<{ sig: string; entry: string } | null> {
+  let loc: string | null;
+  try {
+    const res = await fetch(`${GATEWAY_URL}/sns/${name}/record`, { redirect: "manual" });
+    loc = res.headers.get("location");
+  } catch (e) {
+    console.warn(`[proxy] sns record fetch failed: ${name}`, e);
+    return null;
+  }
+  if (!loc) return null;
+  // loc looks like "/site/<86-90 char sig>/<entry...>"
+  const m = loc.match(/^\/site\/([1-9A-HJ-NP-Za-km-z]{86,90})\/?(.*)$/);
+  if (!m) return null;
+  return { sig: m[1], entry: m[2] || "" };
+}
+
 // Pull an ident out of the Referer header, if it points at /{ident}/... on
 // our host. Used to route deployed sites' root-absolute assets (e.g. when
 // the HTML has <script src="/src/app.js">) back into /site/{treeTxId}/...
@@ -66,6 +111,26 @@ function identFromReferer(req: NextRequest): string | null {
 }
 
 export async function proxy(req: NextRequest) {
+  // Host-routing (nubs model): if a foreign domain CNAME'd into us, the request
+  // arrives with that domain in the Host header (e.g. "zo-iq.sol.site"). Before
+  // showing our own app, check whether the wrapping domain has an on-chain URL
+  // record — if so, serve THAT site at the wrapping URL, address bar unchanged.
+  const wrapName = snsNameFromHost(req.headers.get("host") ?? "");
+  if (wrapName) {
+    const site = await resolveWrappedSite(wrapName);
+    if (site) {
+      const reqPath = req.nextUrl.pathname;
+      // No sub-path → serve the entry the URL record baked in (e.g. gameboy.html).
+      const tail = reqPath === "/" || reqPath === "" ? site.entry : reqPath.replace(/^\//, "");
+      const dest = req.nextUrl.clone();
+      dest.pathname = `/site/${site.sig}/${tail}`;
+      const headers = new Headers(req.headers);
+      headers.set("x-iqpages-ident", wrapName);
+      return NextResponse.rewrite(dest, { request: { headers } });
+    }
+    // Wrapping domain with no IQ record → fall through to normal app handling.
+  }
+
   const parts = req.nextUrl.pathname.split("/").filter(Boolean);
   if (parts.length === 0) return NextResponse.next();
   const [first, ...rest] = parts;
