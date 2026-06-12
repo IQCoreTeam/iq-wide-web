@@ -79,14 +79,16 @@ function snsNameFromHost(host: string): string | null {
 // link they want here (e.g. "browser.iqlabs.dev/<pda>" or
 // "gateway.iqlabs.dev/site/<sig>/<file>"); we interpret whatever shape it is.
 // Edge-safe: fetch + JSON only.
-async function fetchUrlRecord(name: string): Promise<string | null> {
+async function fetchPointer(name: string): Promise<string | null> {
   try {
-    const res = await fetch(`${GATEWAY_URL}/sns/${name}/url`);
+    // The gateway's /pointer is the host-routing target: the SOL record (a bare
+    // pubkey/PDA) if set, else the TXT record. CNAME and URL are not consulted.
+    const res = await fetch(`${GATEWAY_URL}/sns/${name}/pointer`);
     if (!res.ok) return null;
-    const data = (await res.json()) as { url?: string | null };
-    return data.url ?? null;
+    const data = (await res.json()) as { pointer?: string | null };
+    return data.pointer ?? null;
   } catch (e) {
-    console.warn(`[proxy] url record fetch failed: ${name}`, e);
+    console.warn(`[proxy] sns pointer fetch failed: ${name}`, e);
     return null;
   }
 }
@@ -101,7 +103,7 @@ const TX_SIG_RE = /^[1-9A-HJ-NP-Za-km-z]{86,90}$/;
 //  - a bare 86–90 char tx signature          → serve /site/<sig> directly
 //  - "browser.iqlabs.dev/<pda>" or a bare <pda> → reduce to an ident (the last
 //    path segment) and run it through the dispatcher (repo/wallet/site view).
-function interpretUrlRecord(
+function interpretPointer(
   url: string,
 ): { kind: "site"; sig: string; entry: string } | { kind: "ident"; ident: string } {
   // Full /site/<sig>/<file> URL → sig + entry path.
@@ -134,11 +136,11 @@ export async function proxy(req: NextRequest) {
   // wrapping URL, address bar unchanged.
   const wrapName = snsNameFromHost(req.headers.get("host") ?? "");
   if (wrapName) {
-    const url = await fetchUrlRecord(wrapName);
-    if (url) {
+    const pointer = await fetchPointer(wrapName);
+    if (pointer) {
       const reqPath = req.nextUrl.pathname;
       const subPath = reqPath === "/" || reqPath === "" ? "" : reqPath.replace(/^\//, "");
-      const record = interpretUrlRecord(url);
+      const record = interpretPointer(pointer);
 
       // Under host-routing the site lives at the host root, so its own
       // root-relative/relative asset URLs resolve correctly as-is — and every
