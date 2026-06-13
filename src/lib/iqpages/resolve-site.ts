@@ -44,15 +44,19 @@ async function pickEntry(treeTxId: string): Promise<string> {
   return firstHtml ?? manifest.indexPath;
 }
 
-/** Turn a .sol domain into the pubkey it points at (record beats owner —
- *  see iq-wide-web resolver). Plain pubkeys pass through unchanged. */
+/** Turn a .sol domain into the pubkey it points at — the host-routing pointer
+ *  (SOL record, else TXT), the same source used by *.sol.site host-routing, so
+ *  browser.iqlabs.dev/<name>.sol and <name>.sol.site resolve identically. Falls
+ *  back to the registry owner if no pointer is set. Plain pubkeys pass through. */
 async function snsResolve(ident: string): Promise<string | null> {
   if (!ident.toLowerCase().endsWith(".sol")) {
     return PUBKEY_RE.test(ident) ? ident : null;
   }
+  const ptr = await gwJson<{ pointer: string | null }>(`/sns/${ident}/pointer`);
+  if (ptr?.pointer) return recordTarget(ptr.pointer);
+  // No SOL/TXT pointer — fall back to the registry owner.
   const sns = await gwJson<SnsResult>(`/sns/${ident}`);
-  if (!sns) return null;
-  return sns.record ? recordTarget(sns.record) : sns.owner;
+  return sns?.owner ?? null;
 }
 
 /** Resolve to {treeTxId, entry} when ident is a deployed git repo; otherwise
