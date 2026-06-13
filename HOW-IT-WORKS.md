@@ -1,9 +1,9 @@
 # How it works: what happens when we hit `spacebun.sol.site`
 
 This doc traces a single request — `https://spacebun.sol.site/` — end to end:
-from the moment traffic reaches our edge, through reading the on-chain pointer,
-resolving the live site via the IQ git layer, and serving the files from the
-gateway.
+from the moment traffic reaches our edge, through reading the IQ GitHub PDA from
+the domain's on-chain record, resolving the live site via the IQ git layer, and
+serving the files from the gateway.
 
 > Companion read: the gateway side of SNS resolution (records, `*.sol.site`
 > host-routing, TLS) lives in the IQ Gateway repo's
@@ -16,7 +16,7 @@ gateway.
 flowchart TD
     U(["Visitor opens spacebun.sol.site"]) --> CF["sol.site DNS<br/>CNAME → sns.iqlabs.dev → our origin"]
     CF --> PX["proxy.ts<br/>(Edge middleware)"]
-    PX -->|"reads on-chain pointer"| GW1["gateway /sns/spacebun/pointer"]
+    PX -->|"reads IQ GitHub PDA"| GW1["gateway /sns/spacebun/pointer"]
     GW1 -->|"PDA (git_commits table)"| RS["resolve-site.ts<br/>git-sdk layer"]
     RS -->|"owner's latest commit → treeTxId"| RW["rewrite → /site/treeTxId/entry"]
     RW --> SR["site route<br/>(app/site/treeTxId)"]
@@ -29,7 +29,7 @@ server-side before a single byte of the page is painted.
 
 ---
 
-## 1. Traffic arrives → `proxy.ts` reads the on-chain pointer
+## 1. Traffic arrives → `proxy.ts` reads the IQ GitHub PDA
 
 `spacebun.sol` set a CNAME so sol.site routes the request into our origin. The
 request arrives with `Host: spacebun.sol.site`. Our Edge middleware
