@@ -6,48 +6,29 @@
 // the server and rewrite the request internally, so the address bar stays
 // on /{ident} while the proxy route serves the gateway HTML.
 //
-// Caches: ident → {treeTxId, entry} and treeTxId → manifest (file list +
-// indexPath). Module-scope Maps in Edge instance memory; cold instances
-// re-fetch, which is fine — the gateway has its own caches behind them.
+// No caching here on purpose: caching is the gateway's job (it caches the SNS
+// pointer and the immutable /site/<sig> files). The proxy resolves fresh every
+// request so a just-changed record / new commit goes live immediately, with no
+// browser-side TTL skew between the path-based and host-routed forms.
 
 import { NextRequest, NextResponse } from "next/server";
 import { resolveDeployedSite } from "@/lib/iqpages/resolve-site";
 import { recordTarget } from "@/resolver/shape";
 import { GATEWAY_URL } from "@/lib/constants";
 
-const CACHE_TTL_MS = 5 * 60 * 1000;
-const MANIFEST_TTL_MS = 60 * 60 * 1000;
-type Resolved = { treeTxId: string; entry: string } | null;
 type Manifest = { indexPath: string; files: Record<string, string> } | null;
-type Entry<T> = { value: T; expires: number };
 
-const identCache = new Map<string, Entry<Resolved>>();
-const manifestCache = new Map<string, Entry<Manifest>>();
-
-function cachedResolve(ident: string): Promise<Resolved> {
-  const hit = identCache.get(ident);
-  if (hit && hit.expires > Date.now()) return Promise.resolve(hit.value);
-  return resolveDeployedSite(ident).then((res) => {
-    identCache.set(ident, { value: res, expires: Date.now() + CACHE_TTL_MS });
-    return res;
-  });
-}
-
-async function cachedManifest(treeTxId: string): Promise<Manifest> {
-  const hit = manifestCache.get(treeTxId);
-  if (hit && hit.expires > Date.now()) return hit.value;
-  let value: Manifest = null;
+async function fetchManifest(treeTxId: string): Promise<Manifest> {
   try {
     const res = await fetch(`${GATEWAY_URL}/site/${treeTxId}/manifest`);
     if (res.ok) {
       const m = (await res.json()) as { indexPath?: string; files?: Record<string, string> };
-      if (m.files) value = { indexPath: m.indexPath ?? "index.html", files: m.files };
+      if (m.files) return { indexPath: m.indexPath ?? "index.html", files: m.files };
     }
   } catch (e) {
     console.warn(`[proxy] manifest fetch failed: ${treeTxId}`, e);
   }
-  manifestCache.set(treeTxId, { value, expires: Date.now() + MANIFEST_TTL_MS });
-  return value;
+  return null;
 }
 
 const PUBKEY_RE = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
@@ -161,7 +142,7 @@ export async function proxy(req: NextRequest) {
       // Run it through the same pipeline as /{ident}: a deployed site is
       // rewritten into the proxy route; anything else falls through so the
       // client app renders the matching (repo/wallet/...) view.
-      const resolved = await cachedResolve(record.ident);
+      const resolved = await resolveDeployedSite(record.ident);
       if (resolved) {
         const tail = subPath || resolved.entry;
         const dest = req.nextUrl.clone();
@@ -179,7 +160,7 @@ export async function proxy(req: NextRequest) {
   // Case 1: the first segment is itself an ident — visitor typed /{ident}
   // or /{ident}/{sub-path}. Resolve and rewrite as before.
   if (isIdent(first)) {
-    const resolved = await cachedResolve(first);
+    const resolved = await resolveDeployedSite(first);
     if (!resolved) return NextResponse.next();
 
     // The site route needs to know the ident so it can inject
@@ -202,10 +183,10 @@ export async function proxy(req: NextRequest) {
   // route below will produce a clean 404 for paths that don't exist.
   const ident = identFromReferer(req);
   if (!ident) return NextResponse.next();
-  const resolved = await cachedResolve(ident);
+  const resolved = await resolveDeployedSite(ident);
   if (!resolved) return NextResponse.next();
   const wanted = parts.join("/");
-  const manifest = await cachedManifest(resolved.treeTxId);
+  const manifest = await fetchManifest(resolved.treeTxId);
   if (manifest && !manifest.files[wanted]) return NextResponse.next();
   const url = req.nextUrl.clone();
   url.pathname = `/site/${resolved.treeTxId}/${wanted}`;
