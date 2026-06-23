@@ -327,45 +327,10 @@ function effectiveMime(filetype: string, filename?: string, ext?: string): strin
   return EXT_MIME[hint] || filetype || "application/octet-stream";
 }
 
-// Writers often leave no useful filetype — either missing or the catch-all
-// octet-stream. In that case trust the bytes over the label and sniff them.
-function isUnknownMime(mime: string): boolean {
-  return !mime || mime === "application/octet-stream";
-}
-
-// `{`/`[` lead + a successful parse → render as pretty JSON.
-function looksLikeJson(s: string): boolean {
-  const t = s.trimStart();
-  if (!t.startsWith("{") && !t.startsWith("[")) return false;
-  try {
-    JSON.parse(s);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-// Printable-text sniff for the unknown-mime path. Rejects long pure-base64
-// blobs (encoded binary that's coincidentally ASCII) and anything with a
-// meaningful share of control bytes, so genuine binaries still fall through.
-function looksLikeText(s: string): boolean {
-  if (!s) return false;
-  const sample = s.slice(0, 2000);
-  if (s.length > 256 && /^[A-Za-z0-9+/=\s]+$/.test(sample)) return false;
-  let control = 0;
-  for (let i = 0; i < sample.length; i += 1) {
-    const c = sample.charCodeAt(i);
-    if (c === 9 || c === 10 || c === 13) continue;
-    if (c < 32 || c === 127) control += 1;
-  }
-  return control / sample.length < 0.02;
-}
-
 /** Render `/data/{sig}` content in-browser using a data: URI inferred from the
  *  metadata (filetype + filename extension, or a row-level `ext`). Images go
  *  inline; everything else falls into a Win95-CRT console box that mirrors the
- *  gateway /render look. When the filetype is missing/octet-stream we sniff the
- *  bytes so real text/JSON renders instead of a bogus "binary" notice. */
+ *  gateway /render look. No gateway redirects — bytes here, view here. */
 function PayloadView({ payload, ext }: { payload: DataPayload; ext?: string }) {
   const meta = parseMeta(payload.metadata);
   const raw = payload.data ?? "";
@@ -382,7 +347,7 @@ function PayloadView({ payload, ext }: { payload: DataPayload; ext?: string }) {
     );
   }
 
-  if (mime === "application/json" || (isUnknownMime(mime) && looksLikeJson(raw))) {
+  if (mime === "application/json") {
     let pretty = raw;
     try {
       pretty = JSON.stringify(JSON.parse(raw), null, 2);
@@ -392,11 +357,11 @@ function PayloadView({ payload, ext }: { payload: DataPayload; ext?: string }) {
     return <ConsoleView title={title} body={pretty} />;
   }
 
-  if (mime.startsWith("text/") || (isUnknownMime(mime) && looksLikeText(raw))) {
+  if (mime.startsWith("text/")) {
     return <ConsoleView title={title} body={raw} />;
   }
 
-  // Genuine binary — show a short notice in the console, plus a download.
+  // Unknown / binary — show a short notice in the console, plus a download.
   return (
     <ConsoleView
       title={title}
@@ -424,10 +389,7 @@ function ExpandedRow({
   // Pure inline rows (no sig, empty __onChainPath) already have their content
   // spread into the row fields above; nothing to fetch.
   const txSig = row.__txSignature;
-  // An empty `sig` is the schema's default, not a pointer — guard against it so
-  // it doesn't short-circuit the `??` below and swallow the __onChainPath path.
-  const assetSig =
-    typeof row.sig === "string" && row.sig.length > 0 ? row.sig : undefined;
+  const assetSig = typeof row.sig === "string" ? row.sig : undefined;
   const onChainPath = typeof row.__onChainPath === "string" ? row.__onChainPath : "";
   const dataSig = assetSig ?? (onChainPath.length > 0 ? txSig : undefined);
   const payload = useQuery({
@@ -439,15 +401,6 @@ function ExpandedRow({
     gcTime: 30 * 60_000,
   });
   const ext = typeof row.ext === "string" ? row.ext : undefined;
-  // Inline non-JSON payloads: the gateway couldn't spread the content into row
-  // columns, so it left the raw bytes on `data` with the file `metadata`
-  // alongside ({ signature, metadata, data }). That content is already here —
-  // render it without a /data round trip (there's no separate sig to fetch).
-  const inlinePayload: DataPayload | null =
-    !dataSig && typeof row.data === "string" && typeof row.metadata === "string"
-      ? { data: row.data, metadata: row.metadata }
-      : null;
-  const shownPayload = payload.data ?? inlinePayload;
 
   return (
     <div style={{ padding: 8, fontSize: FONT.meta, lineHeight: 1.6, minWidth: 0 }}>
@@ -475,11 +428,11 @@ function ExpandedRow({
         )}
       </div>
       <pre style={codeBlockStyle}>{JSON.stringify(row, null, 2)}</pre>
-      {(dataSig || inlinePayload) && (
+      {dataSig && (
         <div style={{ marginTop: 8 }}>
           <strong style={{ fontSize: FONT.body }}>payload</strong>
           {payload.isLoading && <div>loading…</div>}
-          {shownPayload && <PayloadView payload={shownPayload} ext={ext} />}
+          {payload.data && <PayloadView payload={payload.data} ext={ext} />}
         </div>
       )}
     </div>
