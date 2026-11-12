@@ -11,15 +11,17 @@ import {
   WindowHeader,
 } from "react95";
 import { FONT } from "@/lib/ui/typography";
+import { InventoryTab } from "./inventory-tab";
 import { IqChanTab } from "./iqchan-tab";
 import { IqGitTab } from "./iqgit-tab";
 import { LookupWindow } from "./lookup-window";
 import { SolChatTab } from "./solchat-tab";
 import { UnofficialAppsDropdown } from "./unofficial-apps-dropdown";
 
-type TabKey = "solchat" | "iqchan" | "iqgit" | "unofficial";
+type TabKey = "inventory" | "solchat" | "iqchan" | "iqgit" | "unofficial";
 
 const Column = styled.div`
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -29,6 +31,7 @@ const Column = styled.div`
  *  Tab 내부 폰트를 축소하고 패딩을 줄여 한 줄로 유지. react95 Tab은
  *  내부적으로 button 으로 렌더되므로 그 element 를 직접 겨냥한다. */
 const CompactTabs = styled(Tabs)`
+  overflow-x: auto;
   @media (max-width: 640px) {
     button {
       font-size: ${FONT.meta}px;
@@ -50,7 +53,7 @@ const Placeholder = styled.p`
 /** Right-column apps surface. Identical on / and /[wallet] — only the
  *  `walletAddress` prop differs (own wallet vs. viewed wallet). */
 export function AppPanel({ walletAddress }: { walletAddress: string }) {
-  const [tab, setTab] = useState<TabKey>("iqchan");
+  const [tab, setTab] = useState<TabKey>("inventory");
 
   return (
     <Column>
@@ -60,6 +63,7 @@ export function AppPanel({ walletAddress }: { walletAddress: string }) {
         <WindowHeader><span>apps.exe</span></WindowHeader>
         <WindowContent style={{ padding: 8, display: "flex", flexDirection: "column", gap: 0 }}>
           <CompactTabs value={tab} onChange={(v) => setTab(v as TabKey)}>
+            <Tab value="inventory">Inventory</Tab>
             <Tab value="solchat">SolChat</Tab>
             <Tab value="iqchan">BlockChan</Tab>
             <Tab value="iqgit">IQ GitHub</Tab>
@@ -67,6 +71,7 @@ export function AppPanel({ walletAddress }: { walletAddress: string }) {
           </CompactTabs>
           <ScrollView style={{ height: 300 }}>
             <TabsBody>
+              {tab === "inventory" && <InventoryTab walletAddress={walletAddress} />}
               {tab === "solchat" && <SolChatTab walletAddress={walletAddress} />}
               {tab === "iqchan" && <IqChanTab walletAddress={walletAddress} />}
               {tab === "iqgit" && <IqGitTab walletAddress={walletAddress} />}

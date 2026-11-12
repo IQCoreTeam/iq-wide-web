@@ -52,9 +52,10 @@ export interface InventoryEntry {
 export async function fetchInventoryGW(
   pubkey: string,
   limit = 100,
+  before?: string,
 ): Promise<InventoryEntry[]> {
   try {
-    const res = await gwFetch(`/user/${pubkey}/assets?limit=${limit}`);
+    const res = await gwFetch(`/user/${pubkey}/assets?limit=${limit}${before ? `&before=${encodeURIComponent(before)}` : ""}`);
     const data = await res.json();
     const assets = Array.isArray(data) ? data : data.assets ?? [];
     return assets.map((a: Record<string, unknown>) => ({
@@ -67,7 +68,7 @@ export async function fetchInventoryGW(
     }));
   } catch (e) {
     console.warn("[gateway] inventory fallback to RPC", e);
-    const rows = await iqlabs.reader.fetchInventoryTransactions(new PublicKey(pubkey), limit);
+    const rows = await iqlabs.reader.fetchInventoryTransactions(new PublicKey(pubkey), limit, before);
     return rows.map((r) => ({
       signature: r.signature,
       slot: r.slot,
