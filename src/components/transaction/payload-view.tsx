@@ -90,7 +90,7 @@ export function PayloadView({ payload, ext }: { payload: { data?: string | null;
   return <>
     {image && !imageFailed ? <>
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={`data:${mime};base64,${base64}`} alt={filename} onError={() => setImageFailed(true)} style={{ maxWidth: "100%", maxHeight: 480, display: "block" }} />
+      <img src={`data:${mime};base64,${base64}`} alt={filename} onError={() => setImageFailed(true)} style={{ width: "auto", height: "auto", maxWidth: "100%", maxHeight: 480, objectFit: "contain", alignSelf: "flex-start", display: "block" }} />
       <a href={download.href} download={filename}>Download {filename}</a>
     </> : <ConsoleView title={filename} body={stored ? payload.data ?? "" : text ?? `Preview unavailable (${mime}). Download the file to inspect it.`} download={download} />}
     {encoded && text !== null && <label style={{ display: "block", marginTop: 8 }}><input type="checkbox" checked={stored} onChange={e => setStored(e.target.checked)} /> Show stored data (base64)</label>}

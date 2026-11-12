@@ -86,6 +86,10 @@ const Body = styled.p<{ $mono?: boolean }>`
 
 const Thumb = styled.img`
   display: block;
+  align-self: flex-start;
+  width: auto;
+  height: auto;
+  object-fit: contain;
   max-width: 100%;
   max-height: 200px;
   margin-top: 2px;
