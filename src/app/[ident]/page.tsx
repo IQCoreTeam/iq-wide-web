@@ -101,8 +101,8 @@ export default function IdentPage() {
         <PageContainer>
           <AppHeader showBack />
           <ResponsiveGrid>
-            <ProfilePanel walletAddress={resolved.pubkey} />
-            <AppPanel walletAddress={resolved.pubkey} />
+            <ProfilePanel walletAddress={resolved.pubkey} network={resolved.network} />
+            <AppPanel walletAddress={resolved.pubkey} network={resolved.network} />
           </ResponsiveGrid>
           <AppFooter viewing={resolved.pubkey} />
         </PageContainer>

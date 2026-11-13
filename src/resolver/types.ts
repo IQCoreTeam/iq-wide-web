@@ -1,7 +1,13 @@
 // Shape: classification by string form alone, no network calls.
 // Probe (resolve.ts / use-resolve.ts) further narrows a pubkey into
 // dbroot-table / wallet / not-found by asking the gateway.
-export type Shape = "sol" | "sig" | "pubkey" | "invalid";
+export type Shape = "sol" | "sig" | "pubkey" | "evm" | "invalid";
+
+// Which chain a resolved wallet lives on. Base58 wallets are Solana; `0x`
+// wallets are Robinhood (the only EVM we read today). Threaded into the gateway
+// reads so the browser fetches the right network, and into AppPanel so each
+// chain shows only the apps it actually has.
+export type ChainNetwork = "solana" | "robinhood";
 
 // Mirror of the gateway /dbroots payload (see iq-gateway src/routes/dbroots.ts).
 // Shared by the matcher and the resolve hook, so it lives here rather than
@@ -25,7 +31,7 @@ export interface DbRoot {
 
 // What an identifier resolves to — the thing [ident]/page.tsx renders on.
 export type IdentifierKind =
-  | { kind: "wallet"; pubkey: string }
+  | { kind: "wallet"; pubkey: string; network: ChainNetwork }
   // Matched a table PDA on a known DbRoot. `dbroot`/`hint` say which dApp and
   // which table, so the dApp-specific view (or the dev belongs-to popup) can
   // act on it.

@@ -39,5 +39,9 @@ export const IQGIT_URL = "https://git.iqlabs.dev";
  *  as `/#/po/{threadSeed}:{signature}`. */
 export const IQCHAN_URL = "https://blockchan.sol.site";
 
+/** HoodChan — the Robinhood Chain (EVM) sibling of BlockChan. Shown in place of
+ *  BlockChan when the viewed wallet is a 0x address. */
+export const HOODCHAN_URL = "https://hoodchan.xyz";
+
 /** Solana program id for the IQLabs contract. */
 export const PROGRAM_ID = "9KLLchQVJpGkw4jPuUmnvqESdR7mtNCYr3qS4iQLabs";

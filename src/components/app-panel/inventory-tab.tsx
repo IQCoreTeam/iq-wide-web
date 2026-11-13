@@ -12,6 +12,7 @@ import {
   parseMetadata,
   type InventoryEntry,
 } from "@/lib/inventory/inventory";
+import type { ChainNetwork } from "@/resolver/types";
 import { FONT } from "@/lib/ui/typography";
 
 const Wrapper = styled.div`
@@ -161,7 +162,17 @@ function previewOf(entry: InventoryEntry): Preview {
   return typeof meta?.data === "string" ? { tag, text: meta.data } : { tag };
 }
 
-function EntryCard({ entry }: { entry: InventoryEntry }) {
+// Gateway routes need the network tag for EVM; the explorer differs per chain.
+function netSuffix(network: ChainNetwork): string {
+  return network === "solana" ? "" : `?network=${network}`;
+}
+function explorerTxUrl(sig: string, network: ChainNetwork): string {
+  return network === "robinhood"
+    ? `https://robinhoodchain.blockscout.com/tx/${sig}`
+    : `https://solscan.io/tx/${sig}`;
+}
+
+function EntryCard({ entry, network }: { entry: InventoryEntry; network: ChainNetwork }) {
   const preview = previewOf(entry);
   const chunks = parseMetadata(entry)?.total_chunks ?? 1;
   const [thumbFailed, setThumbFailed] = useState(false);
@@ -186,7 +197,7 @@ function EntryCard({ entry }: { entry: InventoryEntry }) {
 
       {showThumb && (
         <Thumb
-          src={`${GATEWAY_URL}/img/${entry.signature}.png`}
+          src={`${GATEWAY_URL}/img/${entry.signature}.png${netSuffix(network)}`}
           alt={preview.tag}
           loading="lazy"
           onError={() => setThumbFailed(true)}
@@ -203,7 +214,7 @@ function EntryCard({ entry }: { entry: InventoryEntry }) {
 
       <Links>
         <Anchor
-          href={`https://solscan.io/tx/${entry.signature}`}
+          href={explorerTxUrl(entry.signature, network)}
           target="_blank"
           rel="noopener noreferrer"
           style={{ fontSize: FONT.meta }}
@@ -211,7 +222,7 @@ function EntryCard({ entry }: { entry: InventoryEntry }) {
           {shortSig(entry.signature)}
         </Anchor>
         <Anchor
-          href={`${GATEWAY_URL}/view/${entry.signature}`}
+          href={`${GATEWAY_URL}/view/${entry.signature}${netSuffix(network)}`}
           target="_blank"
           rel="noopener noreferrer"
           style={{ fontSize: FONT.meta }}
@@ -225,16 +236,16 @@ function EntryCard({ entry }: { entry: InventoryEntry }) {
 
 /** Every code-in write by this wallet, newest first: the UserInventory PDA
  *  feed the other tabs filter from, shown unfiltered. */
-export function InventoryTab({ walletAddress }: { walletAddress: string }) {
+export function InventoryTab({ walletAddress, network = "solana" }: { walletAddress: string; network?: ChainNetwork }) {
   const queryClient = useQueryClient();
   const { data, isLoading, error, hasNextPage, fetchNextPage, isFetchingNextPage } = useInfiniteQuery({
-    queryKey: ["inventory-pages", walletAddress],
+    queryKey: ["inventory-pages", walletAddress, network],
     initialPageParam: undefined as string | undefined,
     queryFn: ({ pageParam }) => pageParam
-      ? fetchInventoryGW(walletAddress, 100, pageParam)
+      ? fetchInventoryGW(walletAddress, 100, pageParam, network)
       : queryClient.fetchQuery({
-          queryKey: ["inventory", walletAddress, 100],
-          queryFn: () => fetchInventoryGW(walletAddress, 100),
+          queryKey: ["inventory", walletAddress, network, 100],
+          queryFn: () => fetchInventoryGW(walletAddress, 100, undefined, network),
           staleTime: 60_000,
         }),
     // The SDK filters non-inscription transactions, so a short page does
@@ -268,7 +279,7 @@ export function InventoryTab({ walletAddress }: { walletAddress: string }) {
         <span>newest first</span>
       </SummaryRow>
       <List>
-        {entries.map((e) => <EntryCard key={e.signature} entry={e} />)}
+        {entries.map((e) => <EntryCard key={e.signature} entry={e} network={network} />)}
       </List>
       {error && <Stub>Could not load more inscriptions. Please try again.</Stub>}
       {hasNextPage && (

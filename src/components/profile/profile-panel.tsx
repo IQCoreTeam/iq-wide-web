@@ -7,6 +7,7 @@ import { useWallet } from "@solana/wallet-adapter-react";
 import { ProfileCard } from "./profile-card";
 import { ProfileEditor } from "./profile-editor";
 import { useProfile } from "@/lib/profile/use-profile";
+import type { ChainNetwork } from "@/resolver/types";
 import { FONT } from "@/lib/ui/typography";
 
 const StatusWindow = styled(Window)`
@@ -31,12 +32,15 @@ const ErrorText = styled.p`
  * Self-contained profile surface: loading / error / display / edit, for one
  * wallet. Used by home (viewer's own wallet) and /[wallet] (route param).
  */
-export function ProfilePanel({ walletAddress }: { walletAddress: string }) {
+export function ProfilePanel({ walletAddress, network = "solana" }: { walletAddress: string; network?: ChainNetwork }) {
   const viewer = useWallet();
+  // Editing is a Solana write path; a 0x wallet can never match the connected
+  // Solana viewer, so EVM profiles stay read-only (gateway returns just the
+  // address, so the card shows its empty state).
   const isOwner = viewer.publicKey?.toBase58() === walletAddress;
   const [editing, setEditing] = useState(false);
 
-  const { data: profile, isLoading, error } = useProfile(walletAddress);
+  const { data: profile, isLoading, error } = useProfile(walletAddress, network);
 
   if (isLoading) {
     return (

@@ -2,6 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { GATEWAY_URL } from "@/lib/constants";
+import type { ChainNetwork } from "@/resolver/types";
 import type { ProfileMeta } from "./profile";
 
 /**
@@ -20,11 +21,12 @@ import type { ProfileMeta } from "./profile";
  * Returns null when the wallet has no profile yet (gateway returns just
  * `{ pubkey }`) — UI shows the empty state instead of spinning forever.
  */
-export function useProfile(walletAddress: string | undefined) {
+export function useProfile(walletAddress: string | undefined, network: ChainNetwork = "solana") {
   return useQuery<ProfileMeta | null>({
-    queryKey: ["profile", walletAddress],
+    queryKey: ["profile", walletAddress, network],
     queryFn: async () => {
-      const res = await fetch(`${GATEWAY_URL}/user/${walletAddress}/profile`);
+      const netQuery = network === "solana" ? "" : `?network=${network}`;
+      const res = await fetch(`${GATEWAY_URL}/user/${walletAddress}/profile${netQuery}`);
       if (!res.ok) return null;
       const data = (await res.json()) as Partial<ProfileMeta> & { pubkey?: string };
       // No `name` → gateway found no profile metadata for this wallet.

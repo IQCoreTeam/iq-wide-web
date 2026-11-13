@@ -5,6 +5,9 @@ import type { Shape } from "./types";
 // inputs in the wild. Tx signatures are 64 raw bytes → 87-88 base58 chars.
 const PUBKEY_RE = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
 const SIG_RE = /^[1-9A-HJ-NP-Za-km-z]{87,88}$/;
+// EVM address: 0x + 40 hex. The leading "0" is outside the base58 alphabet, so
+// this never collides with PUBKEY_RE.
+const EVM_ADDR_RE = /^0x[0-9a-fA-F]{40}$/;
 
 // Owners sometimes set a SOL record to a browser URL ("browser.iqlabs.dev/<PDA>")
 // instead of a bare pubkey. Take the last path segment so a URL-shaped record and
@@ -18,6 +21,7 @@ export function shapeOf(raw: string | undefined | null): Shape {
   const s = raw.trim();
   if (!s) return "invalid";
   if (s.toLowerCase().endsWith(".sol")) return "sol";
+  if (EVM_ADDR_RE.test(s)) return "evm";
   if (SIG_RE.test(s)) return "sig";
   if (PUBKEY_RE.test(s)) return "pubkey";
   return "invalid";

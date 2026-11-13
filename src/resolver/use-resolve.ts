@@ -12,13 +12,17 @@ import type { IdentifierKind } from "./types";
 async function resolvePubkey(pubkey: string): Promise<IdentifierKind> {
   const match = matchPubkey(pubkey, await fetchDbRoots());
   if (match) return { kind: "dbroot-table", pubkey, dbroot: match.dbroot, hint: match.hint };
-  return { kind: "wallet", pubkey };
+  return { kind: "wallet", pubkey, network: "solana" };
 }
 
 async function resolve(ident: string): Promise<IdentifierKind> {
   switch (shapeOf(ident)) {
     case "pubkey":
       return resolvePubkey(ident);
+    case "evm":
+      // 0x address: a Robinhood wallet. DbRoot/table PDAs are a Solana concept,
+      // so skip the probe and read it straight off the EVM gateway.
+      return { kind: "wallet", pubkey: ident, network: "robinhood" };
     case "sig":
       return { kind: "tx", signature: ident };
     case "sol": {

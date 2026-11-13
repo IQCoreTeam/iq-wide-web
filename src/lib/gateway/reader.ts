@@ -6,6 +6,7 @@
 import { PublicKey } from "@solana/web3.js";
 import iqlabs from "iqlabs-sdk";
 import { COMMIT_SCAN_LIMIT, latestOwnerRow } from "../iqpages/latest-commit";
+import type { ChainNetwork } from "@/resolver/types";
 
 const PRIMARY_GATEWAY = "https://gateway.iqlabs.dev";
 const BACKUP_GATEWAY = "https://gateway.iqlabs.dev";
@@ -49,24 +50,56 @@ export interface InventoryEntry {
   row?: Record<string, unknown>;
 }
 
+// Solana /user/assets row -> InventoryEntry. Carries the gateway-prefixed `row`
+// so non-inline entries can still be classified without a body fetch.
+function solanaAsset(a: Record<string, unknown>): InventoryEntry {
+  return {
+    signature: String(a.signature ?? ""),
+    slot: typeof a.slot === "number" ? a.slot : 0,
+    blockTime: typeof a.blockTime === "number" ? a.blockTime : null,
+    onChainPath: typeof a.onChainPath === "string" ? a.onChainPath : "",
+    metadata: typeof a.metadata === "string" ? a.metadata : "",
+    row: typeof a.row === "object" && a.row !== null ? (a.row as Record<string, unknown>) : undefined,
+  };
+}
+
+// EVM /user/assets returns a different shape: {txHash, handle, tailTx,
+// typeField, offset}. Normalize into InventoryEntry so the same cards render it
+// -- tx hash is the id, handle the filename/title, typeField the mime. No inline
+// body comes back, so onChainPath is set (treated as non-inline) and the card
+// previews through the gateway /img route (image) or a stub (anything else).
+function evmAsset(a: Record<string, unknown>): InventoryEntry {
+  const txHash = String(a.txHash ?? "");
+  const handle = typeof a.handle === "string" ? a.handle : "";
+  const filetype = typeof a.typeField === "string" ? a.typeField : "";
+  return {
+    signature: txHash,
+    slot: 0,
+    blockTime: null,
+    onChainPath: txHash,
+    metadata: JSON.stringify({ filename: handle, filetype, total_chunks: 1 }),
+  };
+}
+
 export async function fetchInventoryGW(
   pubkey: string,
   limit = 100,
   before?: string,
+  network: ChainNetwork = "solana",
 ): Promise<InventoryEntry[]> {
+  const netQuery = network === "solana" ? "" : `&network=${network}`;
   try {
-    const res = await gwFetch(`/user/${pubkey}/assets?limit=${limit}${before ? `&before=${encodeURIComponent(before)}` : ""}`);
+    const res = await gwFetch(`/user/${pubkey}/assets?limit=${limit}${before ? `&before=${encodeURIComponent(before)}` : ""}${netQuery}`);
     const data = await res.json();
     const assets = Array.isArray(data) ? data : data.assets ?? [];
-    return assets.map((a: Record<string, unknown>) => ({
-      signature: String(a.signature ?? ""),
-      slot: typeof a.slot === "number" ? a.slot : 0,
-      blockTime: typeof a.blockTime === "number" ? a.blockTime : null,
-      onChainPath: typeof a.onChainPath === "string" ? a.onChainPath : "",
-      metadata: typeof a.metadata === "string" ? a.metadata : "",
-      row: typeof a.row === "object" && a.row !== null ? (a.row as Record<string, unknown>) : undefined,
-    }));
+    return assets.map(network === "solana" ? solanaAsset : evmAsset);
   } catch (e) {
+    // The RPC fallback derives a Solana PublicKey and has no EVM equivalent, so
+    // only Solana falls back; an EVM failure just surfaces as an empty list.
+    if (network !== "solana") {
+      console.warn("[gateway] evm inventory failed", e);
+      return [];
+    }
     console.warn("[gateway] inventory fallback to RPC", e);
     const rows = await iqlabs.reader.fetchInventoryTransactions(new PublicKey(pubkey), limit, before);
     return rows.map((r) => ({

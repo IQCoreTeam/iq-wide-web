@@ -7,14 +7,19 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { fetchInventoryGW } from "@/lib/gateway/reader";
+import type { ChainNetwork } from "@/resolver/types";
 import type { InventoryEntry } from "./inventory";
 
 const DEFAULT_LIMIT = 100;
 
-export function useUserInventory(walletAddress: string | undefined, limit = DEFAULT_LIMIT) {
+export function useUserInventory(
+  walletAddress: string | undefined,
+  network: ChainNetwork = "solana",
+  limit = DEFAULT_LIMIT,
+) {
   return useQuery<InventoryEntry[]>({
-    queryKey: ["inventory", walletAddress, limit],
-    queryFn: () => fetchInventoryGW(walletAddress!, limit),
+    queryKey: ["inventory", walletAddress, network, limit],
+    queryFn: () => fetchInventoryGW(walletAddress!, limit, undefined, network),
     enabled: !!walletAddress,
     staleTime: 60_000,
   });
